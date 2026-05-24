@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smartfin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartfin}
+      POSTGRES_DB: smartfin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartfin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - smartfin-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - smartfin-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-smartfin}
+      SMARTFIN_MODEL: ${SMARTFIN_MODEL:-claude-haiku-4-5}
+      SMARTFIN_ENFORCE_APPROVED_MODELS: ${SMARTFIN_ENFORCE_APPROVED_MODELS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SMARTFIN_LOG_FORMAT: ${SMARTFIN_LOG_FORMAT:-plain}
+      DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - smartfin-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      SMARTFIN_BACKEND_URL: http://backend:8000
+      DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - smartfin-net
+
+  nginx:
+    build:
+      context: ./nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - smartfin-net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  smartfin-net:

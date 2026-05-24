@@ -1,0 +1,272 @@
+[
+  {
+    "id": "t01",
+    "date": "2026-05-27T13:04:40.179597+00:00",
+    "amount": 45.5,
+    "description": "Weekly grocery shop",
+    "merchant": "Tesco",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t02",
+    "date": "2026-05-24T13:04:40.179597+00:00",
+    "amount": 12.8,
+    "description": "Coffee and sandwich",
+    "merchant": "Pret A Manger",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t03",
+    "date": "2026-05-22T13:04:40.179597+00:00",
+    "amount": 38.0,
+    "description": "Restaurant dinner",
+    "merchant": "Nando's",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t04",
+    "date": "2026-05-17T13:04:40.179597+00:00",
+    "amount": 25.0,
+    "description": "Grocery top-up",
+    "merchant": "Sainsbury's",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t05",
+    "date": "2026-05-26T13:04:40.179597+00:00",
+    "amount": 22.4,
+    "description": "Monthly bus pass top-up",
+    "merchant": "TfL",
+    "category": "transport",
+    "location": "London"
+  },
+  {
+    "id": "t06",
+    "date": "2026-05-19T13:04:40.179597+00:00",
+    "amount": 15.0,
+    "description": "Taxi to airport",
+    "merchant": "Uber",
+    "category": "transport",
+    "location": "London"
+  },
+  {
+    "id": "t07",
+    "date": "2026-05-09T13:04:40.179597+00:00",
+    "amount": 8.5,
+    "description": "Single bus fare",
+    "merchant": "TfL",
+    "category": "transport",
+    "location": "London"
+  },
+  {
+    "id": "t08",
+    "date": "2026-05-28T13:04:40.179597+00:00",
+    "amount": 1200.0,
+    "description": "Monthly rent",
+    "merchant": "Landlord",
+    "category": "housing",
+    "location": "London"
+  },
+  {
+    "id": "t09",
+    "date": "2026-05-21T13:04:40.179597+00:00",
+    "amount": 65.0,
+    "description": "Cinema and dinner",
+    "merchant": "Vue Cinema",
+    "category": "entertainment",
+    "location": "London"
+  },
+  {
+    "id": "t10",
+    "date": "2026-05-16T13:04:40.179597+00:00",
+    "amount": 29.99,
+    "description": "Streaming subscriptions",
+    "merchant": "Spotify",
+    "category": "entertainment",
+    "location": "London"
+  },
+  {
+    "id": "t11",
+    "date": "2026-05-25T13:04:40.179597+00:00",
+    "amount": 89.99,
+    "description": "New trainers",
+    "merchant": "Nike",
+    "category": "shopping",
+    "location": "London"
+  },
+  {
+    "id": "t12",
+    "date": "2026-05-11T13:04:40.179597+00:00",
+    "amount": 42.0,
+    "description": "Clothes",
+    "merchant": "H&M",
+    "category": "shopping",
+    "location": "London"
+  },
+  {
+    "id": "t13",
+    "date": "2026-05-23T13:04:40.179597+00:00",
+    "amount": 55.0,
+    "description": "Electricity bill",
+    "merchant": "British Gas",
+    "category": "utilities",
+    "location": "London"
+  },
+  {
+    "id": "t14",
+    "date": "2026-05-07T13:04:40.179597+00:00",
+    "amount": 28.0,
+    "description": "Internet bill",
+    "merchant": "BT",
+    "category": "utilities",
+    "location": "London"
+  },
+  {
+    "id": "t15",
+    "date": "2026-05-20T13:04:40.179597+00:00",
+    "amount": 35.0,
+    "description": "GP prescription",
+    "merchant": "Boots Pharmacy",
+    "category": "healthcare",
+    "location": "London"
+  },
+  {
+    "id": "t16",
+    "date": "2026-05-04T13:04:40.179597+00:00",
+    "amount": 150.0,
+    "description": "Online course",
+    "merchant": "Udemy",
+    "category": "education",
+    "location": "London"
+  },
+  {
+    "id": "t17",
+    "date": "2026-05-14T13:04:40.179597+00:00",
+    "amount": -3200.0,
+    "description": "Monthly salary",
+    "merchant": "Employer Ltd",
+    "category": "income",
+    "location": "London"
+  },
+  {
+    "id": "t18",
+    "date": "2026-04-24T13:04:40.179597+00:00",
+    "amount": 52.3,
+    "description": "Weekly grocery shop",
+    "merchant": "Tesco",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t19",
+    "date": "2026-04-21T13:04:40.179597+00:00",
+    "amount": 18.5,
+    "description": "Lunch",
+    "merchant": "Pret A Manger",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t20",
+    "date": "2026-04-09T13:04:40.179597+00:00",
+    "amount": 21.0,
+    "description": "Grocery top-up",
+    "merchant": "Waitrose",
+    "category": "food",
+    "location": "London"
+  },
+  {
+    "id": "t21",
+    "date": "2026-04-17T13:04:40.179597+00:00",
+    "amount": 22.4,
+    "description": "Monthly bus pass top-up",
+    "merchant": "TfL",
+    "category": "transport",
+    "location": "London"
+  },
+  {
+    "id": "t22",
+    "date": "2026-04-14T13:04:40.179597+00:00",
+    "amount": 12.0,
+    "description": "Taxi home",
+    "merchant": "Uber",
+    "category": "transport",
+    "location": "London"
+  },
+  {
+    "id": "t23",
+    "date": "2026-04-28T13:04:40.179597+00:00",
+    "amount": 1200.0,
+    "description": "Monthly rent",
+    "merchant": "Landlord",
+    "category": "housing",
+    "location": "London"
+  },
+  {
+    "id": "t24",
+    "date": "2026-04-19T13:04:40.179597+00:00",
+    "amount": 40.0,
+    "description": "Theatre tickets",
+    "merchant": "National Theatre",
+    "category": "entertainment",
+    "location": "London"
+  },
+  {
+    "id": "t25",
+    "date": "2026-04-09T13:04:40.179597+00:00",
+    "amount": 29.99,
+    "description": "Streaming subscriptions",
+    "merchant": "Spotify",
+    "category": "entertainment",
+    "location": "London"
+  },
+  {
+    "id": "t26",
+    "date": "2026-04-04T13:04:40.179597+00:00",
+    "amount": 110.0,
+    "description": "Electricity bill",
+    "merchant": "British Gas",
+    "category": "utilities",
+    "location": "London"
+  },
+  {
+    "id": "t27",
+    "date": "2026-04-11T13:04:40.179597+00:00",
+    "amount": 60.0,
+    "description": "New shoes",
+    "merchant": "Clarks",
+    "category": "shopping",
+    "location": "London"
+  },
+  {
+    "id": "t28",
+    "date": "2026-04-15T13:04:40.179597+00:00",
+    "amount": -3200.0,
+    "description": "Monthly salary",
+    "merchant": "Employer Ltd",
+    "category": "income",
+    "location": "London"
+  },
+  {
+    "id": "t29",
+    "date": "2026-05-17T10:00:00.000000+00:00",
+    "amount": 200.0,
+    "description": "Monthly savings deposit",
+    "merchant": "Savings Account",
+    "category": "savings",
+    "location": "London"
+  },
+  {
+    "id": "t30",
+    "date": "2026-04-20T10:00:00.000000+00:00",
+    "amount": 150.0,
+    "description": "Emergency fund contribution",
+    "merchant": "Savings Account",
+    "category": "savings",
+    "location": "London"
+  }
+]

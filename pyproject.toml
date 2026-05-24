@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=71.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "app"
+version = "0.1.0"
+description = "SmartFin: An Agentic AI Multi-Agent Co-Pilot for Personal Financial Management"
+requires-python = ">=3.11"
+authors = [
+    { name = "Rong Shu" },
+    { name = "Shi Zihan" },
+    { name = "Wen Qi" },
+    { name = "Xie Linhan" },
+    { name = "Zhang Junkai" },
+    { name = "Zhang Yuchen" },
+]
+
+dependencies = [
+    # LangChain ecosystem
+    "langchain>=0.3.0",
+    "langchain-anthropic>=0.3.0",
+    "langgraph>=0.2.0",
+    "langsmith>=0.2.0",
+
+    # AI model provider
+    "anthropic>=0.40.0",
+
+    # Data validation & modelling
+    "pydantic>=2.7.0",
+
+    # Data processing
+    "pandas>=2.2.0",
+
+    # UI
+    "streamlit>=1.40.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+
+    # Environment variable management
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.11.0",
+    "bandit>=1.7.9",
+    "pip-audit>=2.7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=app --cov-report=term-missing"
+markers = [
+    "eval: deepeval LLM evaluation tests — require live API keys (exclude with -m 'not eval')",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]

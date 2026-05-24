@@ -1,0 +1,93 @@
+name: CD Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smartfin-deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_PATH: /opt/smartfin
+      SOURCE_PATHS: app,ui,config,scripts,nginx,tests/fixtures,requirements.txt,pyproject.toml,docker-compose.yml,Dockerfile.backend,Dockerfile.frontend,.dockerignore
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare remote deployment directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            mkdir -p "${{ env.DEPLOY_PATH }}"
+            rm -rf \
+              "${{ env.DEPLOY_PATH }}/app" \
+              "${{ env.DEPLOY_PATH }}/ui" \
+              "${{ env.DEPLOY_PATH }}/config" \
+              "${{ env.DEPLOY_PATH }}/scripts" \
+              "${{ env.DEPLOY_PATH }}/nginx" \
+              "${{ env.DEPLOY_PATH }}/tests" \
+              "${{ env.DEPLOY_PATH }}/requirements.txt" \
+              "${{ env.DEPLOY_PATH }}/pyproject.toml" \
+              "${{ env.DEPLOY_PATH }}/docker-compose.yml" \
+              "${{ env.DEPLOY_PATH }}/Dockerfile.backend" \
+              "${{ env.DEPLOY_PATH }}/Dockerfile.frontend" \
+              "${{ env.DEPLOY_PATH }}/.dockerignore"
+
+      - name: Upload application source
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          source: ${{ env.SOURCE_PATHS }}
+          target: ${{ env.DEPLOY_PATH }}
+
+      - name: Render runtime environment and restart services
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker is not installed on the target server."
+              exit 1
+            fi
+
+            cat > "${{ env.DEPLOY_PATH }}/.env" <<'EOF'
+            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            LANGCHAIN_API_KEY=${{ secrets.LANGCHAIN_API_KEY }}
+            LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}
+            LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}
+            SMARTFIN_MODEL=${{ secrets.SMARTFIN_MODEL }}
+            SMARTFIN_ENFORCE_APPROVED_MODELS=${{ secrets.SMARTFIN_ENFORCE_APPROVED_MODELS }}
+            LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+            SMARTFIN_LOG_FORMAT=${{ secrets.SMARTFIN_LOG_FORMAT }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            EOF
+            chmod 600 "${{ env.DEPLOY_PATH }}/.env"
+
+            cd "${{ env.DEPLOY_PATH }}"
+            if docker compose version >/dev/null 2>&1; then
+              docker compose up -d --build --remove-orphans
+            elif command -v docker-compose >/dev/null 2>&1; then
+              docker-compose up -d --build --remove-orphans
+            else
+              echo "Docker Compose is not installed on the target server."
+              exit 1
+            fi
