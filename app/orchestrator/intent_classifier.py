@@ -74,7 +74,7 @@ def classify_intent(message: str) -> str:
         return cached["agent"]
 
     try:
-        model_name = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5"))
+        model_name = resolve_model_name("intent")
         llm = ChatAnthropic(model=model_name)
         structured_llm = llm.with_structured_output(_IntentResult)
 

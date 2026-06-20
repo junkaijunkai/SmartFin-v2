@@ -18,15 +18,15 @@ import calendar
 import json
 import logging
 from datetime import date, datetime
-from typing import Any
+from typing import Annotated, Any, Optional
+from pydantic import Field
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
 
 from app.orchestrator.state_view import AgentStateView
-from app.agents.react_utils import run_react_loop, final_answer as shared_final_answer
-from app.agents.budget_planning.extractor import extract_budget_request as _extract
+from app.agents.react_utils import run_react_loop
 from app.agents.budget_planning.planner import (
     generate_budget_allocations,
     calculate_monthly_spending,
@@ -93,53 +93,92 @@ def budget_planning_node(view: AgentStateView) -> dict:
     # ------------------------------------------------------------------
     # ReAct loop
     # ------------------------------------------------------------------
+    _state_income = monthly_income  # capture before tool parameter shadows outer variable
     tool_ctx: dict[str, Any] = {}
 
     @tool
     def extract_budget_request_tool(
-        user_message: str,
-        provided_monthly_income: float | None = None,
+        monthly_income: Annotated[
+            Optional[float],
+            Field(description=(
+                "The user's gross monthly income. Extract from the message "
+                "(e.g. 'I earn $5000/month', 'my salary is £3000') or use the value "
+                "already shown in the financial context above. "
+                "Set to null only if income is genuinely unknown from both sources."
+            )),
+        ],
+        categories: Annotated[
+            list[str],
+            Field(description=(
+                "Spending categories the user wants to budget for "
+                "(e.g. ['food', 'transport', 'entertainment']). "
+                "Use an empty list to include all available categories. "
+                "Valid values: food, transport, housing, entertainment, healthcare, "
+                "education, shopping, utilities, savings, other."
+            )),
+        ] = [],
     ) -> str:
         """
-        Analyse the user's natural-language budget request and extract
-        structured information: monthly income, categories of interest, and
-        whether more information is needed.
+        Record the budget parameters you have identified from the user's message and context.
 
-        Provide the user's original message and any monthly income you have
-        (or None if unknown).  Returns structured budget request fields.
+        Call this once after reading the user's request and the financial context provided.
+        Extract monthly_income and any category preferences in your own reasoning first,
+        then call this tool to commit the result. Do not use this tool to re-parse the message.
+
+        If monthly_income is null (not found in message or context), this tool returns a
+        signal that clarification is needed. You must then call final_answer to ask the user
+        for their monthly income before generating any allocations.
+
+        Returns the recorded parameters and a 'needs_clarification' flag.
         """
-        extract_state = {
-            "messages": [AIMessage(content=user_message)],
-            "monthly_income": provided_monthly_income,
+        effective_income = monthly_income if monthly_income is not None else _state_income
+        result = {
+            "monthly_income": effective_income,
+            "categories_requested": categories,
+            "needs_clarification": effective_income is None,
         }
-        result = _extract(extract_state, context=extractor_context)
         tool_ctx["budget_request"] = result
-
-        if result.get("needs_clarification"):
+        if result["needs_clarification"]:
             return (
-                "Monthly income is missing. The user needs to provide their "
-                "monthly income before I can create a budget plan."
+                "Monthly income is missing from both the user message and context. "
+                "You must ask the user for their monthly income before proceeding."
             )
-
         return json.dumps(result, default=str)
 
     @tool
     def generate_allocations_tool(
-        monthly_income_arg: float,
-        category_avg_data: dict[str, float],
-        category_trend_data: dict[str, str],
-        existing_budget_data: dict[str, float] | None = None,
+        monthly_income_arg: Annotated[
+            float,
+            Field(description="The user's gross monthly income used as the allocation baseline."),
+        ],
+        category_avg_data: Annotated[
+            dict[str, float],
+            Field(description="Dict mapping each spending category name to its average monthly spend."),
+        ],
+        category_trend_data: Annotated[
+            dict[str, str],
+            Field(description=(
+                "Dict mapping each category to its spending trend direction. "
+                "Valid values: 'rising', 'stable', 'volatile', 'fixed'."
+            )),
+        ],
+        existing_budget_data: Annotated[
+            Optional[dict[str, float]],
+            Field(description=(
+                "Optional dict of existing budget allocations (category → allocated amount). "
+                "Pass null when creating a fresh budget with no prior allocations."
+            )),
+        ] = None,
     ) -> str:
         """
-        Generate budget allocations for each spending category based on income,
-        historical spending averages, and spending trends.
+        Generate recommended budget allocations for each spending category.
 
-        Parameters:
-          monthly_income_arg: The user's monthly income.
-          category_avg_data: Dict mapping category name to average monthly spend.
-          category_trend_data: Dict mapping category name to trend direction
-            ('rising', 'stable', 'volatile', 'fixed').
-          existing_budget_data: Optional dict of existing budget allocations.
+        Call this after extract_budget_request_tool confirms monthly income is available.
+        Use the spending averages and trends from the financial context provided in the
+        system prompt. Do not call this if needs_clarification was true.
+
+        Returns a dict mapping category name to the recommended monthly allocation amount.
+        If a category has a 'rising' trend, its allocation will be adjusted upward.
         """
         raw = generate_budget_allocations(
             monthly_income=monthly_income_arg,
@@ -152,13 +191,22 @@ def budget_planning_node(view: AgentStateView) -> dict:
 
     @tool
     def calculate_spending_tool(
-        transactions_data: list[dict],
+        transactions_data: Annotated[
+            list[dict],
+            Field(description=(
+                "List of categorised transaction objects. Each must have 'amount' (float) "
+                "and 'category' (str) fields. Pass all available categorised transactions."
+            )),
+        ],
     ) -> str:
         """
-        Calculate actual monthly spending from a list of categorised transactions.
+        Compute total actual spending per category for the current month.
 
-        Input should be a JSON array of transaction objects with 'amount',
-        'category' fields.  Returns a dict of category → total spent.
+        Call this after generate_allocations_tool to get real spending figures
+        to compare against the budget targets. Use the categorised transactions
+        available in context. Do not call this before allocations are generated.
+
+        Returns a dict mapping category name to total amount spent this month.
         """
         result = calculate_monthly_spending(transactions_data)
         tool_ctx["actual_spending"] = result
@@ -166,19 +214,31 @@ def budget_planning_node(view: AgentStateView) -> dict:
 
     @tool
     def evaluate_progress_tool(
-        allocations: dict[str, float],
-        spending: dict[str, float],
-        day_of_month: int,
-        total_days: int,
+        allocations: Annotated[
+            dict[str, float],
+            Field(description="Budget allocations from generate_allocations_tool (category → amount)."),
+        ],
+        spending: Annotated[
+            dict[str, float],
+            Field(description="Actual spending from calculate_spending_tool (category → amount spent)."),
+        ],
+        day_of_month: Annotated[
+            int,
+            Field(description="Current day of the month (1–31). Use the value from the context."),
+        ],
+        total_days: Annotated[
+            int,
+            Field(description="Total days in the current month (28–31). Use the value from context."),
+        ],
     ) -> str:
         """
-        Evaluate how actual spending compares against budget allocations.
+        Evaluate how actual spending compares against budget allocations mid-month.
 
-        Parameters:
-          allocations: Dict of category → budgeted amount.
-          spending: Dict of category → actual amount spent.
-          day_of_month: Current day number (1-31).
-          total_days: Total days in the current month (28-31).
+        Call this after both generate_allocations_tool and calculate_spending_tool
+        have returned. Use the day_of_month and total_days values from the financial
+        context. Do not call this before allocations and spending data are available.
+
+        Returns per-category progress data including pacing status and projected overspend.
         """
         result = evaluate_budget_progress(
             budget_allocations=allocations,
@@ -191,13 +251,20 @@ def budget_planning_node(view: AgentStateView) -> dict:
 
     @tool
     def generate_warnings_tool(
-        progress_data: dict[str, Any],
+        progress_data: Annotated[
+            dict[str, Any],
+            Field(description="The progress dict returned by evaluate_progress_tool."),
+        ],
     ) -> str:
         """
-        Generate budget warnings based on progress data.
+        Generate budget warnings for categories at risk of exceeding their allocation.
 
-        Input is the progress dict from evaluate_progress_tool.
-        Returns a list of warning dicts with 'category', 'severity', 'message'.
+        Call this after evaluate_progress_tool has returned. Pass the progress dict
+        exactly as returned by evaluate_progress_tool. Do not call this before
+        budget progress has been evaluated.
+
+        Returns a list of warning objects, each with 'category', 'severity'
+        ('low', 'medium', 'high'), and 'message' describing the risk.
         """
         result = generate_budget_warnings(progress_data)
         tool_ctx["warnings"] = result
@@ -205,17 +272,40 @@ def budget_planning_node(view: AgentStateView) -> dict:
 
     @tool
     def validate_budget_tool(
-        allocations_json: list[dict],
-        progress_json: dict[str, Any],
-        warnings_json: list[dict],
-        summary_text: str,
-        request_json: dict[str, Any],
+        allocations_json: Annotated[
+            list[dict],
+            Field(description=(
+                "List of BudgetAllocation dicts from generate_allocations_tool. "
+                "Each must have 'category', 'allocated_amount', 'spent_amount', "
+                "'period_start', and 'period_end' fields."
+            )),
+        ],
+        progress_json: Annotated[
+            dict[str, Any],
+            Field(description="Progress dict from evaluate_progress_tool."),
+        ],
+        warnings_json: Annotated[
+            list[dict],
+            Field(description="Warnings list from generate_warnings_tool."),
+        ],
+        summary_text: Annotated[
+            str,
+            Field(description="A human-readable summary of the budget plan (1–3 sentences)."),
+        ],
+        request_json: Annotated[
+            dict[str, Any],
+            Field(description="Budget request dict from extract_budget_request_tool."),
+        ],
     ) -> str:
         """
-        Validate the complete budget output for structural correctness.
+        Validate the structural correctness of the complete budget output.
 
-        Returns a validation result dict with 'valid' (bool) and 'errors' (list).
-        Only call this when you have all the budget data ready.
+        Call this only when all preceding tools have been called and their results
+        are available: allocations, progress, warnings, summary, and request.
+        Do not call this before the full pipeline has completed.
+        If validation fails, fix the reported errors and call this tool again.
+
+        Returns 'Budget output is valid.' on success, or a description of errors to fix.
         """
         candidate = {
             "budget_allocations": [
@@ -251,7 +341,6 @@ def budget_planning_node(view: AgentStateView) -> dict:
         evaluate_progress_tool,
         generate_warnings_tool,
         validate_budget_tool,
-        shared_final_answer,
     ])
 
     tools_map: dict[str, Any] = {
@@ -285,7 +374,13 @@ def budget_planning_node(view: AgentStateView) -> dict:
             f"{user_msg}"
         )
 
-    run_react_loop(
+    # Build recent conversation history for multi-turn context
+    history_msgs = [
+        m for m in (messages_list or [])
+        if hasattr(m, 'type') and m.type in ('human', 'ai') and getattr(m, 'content', '')
+    ][:-1]  # Exclude the latest message (already in user_message)
+
+    response, _ = run_react_loop(
         llm=llm,
         tools=tools_map,
         system_prompt=system_text,
@@ -299,37 +394,13 @@ def budget_planning_node(view: AgentStateView) -> dict:
             f"- Spending data by category:\n{categories_context}"
         ),
         tool_ctx=tool_ctx,
+        history=history_msgs[-6:] if history_msgs else None,
     )
 
     # ------------------------------------------------------------------
     # Post-processing: build state update from tool_ctx
     # ------------------------------------------------------------------
     budget_request = tool_ctx.get("budget_request", {})
-
-    # Handle clarification path (missing monthly income)
-    if budget_request.get("needs_clarification"):
-        return {
-            "budget_request": budget_request,
-            "budget_summary": (
-                "More information is needed before generating a budget plan."
-            ),
-            "budget_warnings": [],
-            "budget_progress": {},
-            "output_validation_result": {
-                "valid": True,
-                "errors": [],
-                "sanitized_output": None,
-            },
-            "pending_confirmation": {
-                "action": "clarify_budget_planning",
-                "agent": "budget_planning",
-                "summary": "Monthly income is required to generate a budget plan.",
-                "details": [
-                    "Please provide your monthly income so I can calculate "
-                    "budget allocations.",
-                ],
-            },
-        }
 
     # Build BudgetAllocation objects from tool results
     raw_allocations = tool_ctx.get("raw_allocations", {})
@@ -373,13 +444,11 @@ def budget_planning_node(view: AgentStateView) -> dict:
             )
         )
 
-    summary = tool_ctx.get(
-        "summary",
-        (
-            f"Budget planning completed for {len(raw_allocations)} categories. "
-            f"{len(warnings)} warning(s) generated."
-        ),
+    default_text = (
+        f"Budget planning completed for {len(raw_allocations)} categories. "
+        f"{len(warnings)} warning(s) generated."
     )
+    summary = response.content or default_text
 
     return {
         "budget_allocations": allocation_list,

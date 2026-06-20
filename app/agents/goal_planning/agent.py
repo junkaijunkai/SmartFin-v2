@@ -15,7 +15,8 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date
-from typing import Any
+from typing import Annotated, Any, Optional
+from pydantic import Field
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage
@@ -23,7 +24,7 @@ from langchain_core.tools import tool
 from langchain_anthropic import ChatAnthropic
 
 from app.orchestrator.state_view import AgentStateView
-from app.agents.react_utils import run_react_loop, final_answer as shared_final_answer
+from app.agents.react_utils import run_react_loop
 from app.agents.goal_planning.tracker import calculate_required_monthly_saving as _calc_saving
 from app.agents.goal_planning.extractor import extract_goal_from_message, GoalExtractionResult
 from app.config import resolve_model_name, get_react_prompt
@@ -101,66 +102,175 @@ def run(view: AgentStateView) -> dict:
     tool_ctx: dict[str, Any] = {}
 
     @tool
-    def extract_goal_tool(
-        user_message: str,
-        reference_date: str,
-    ) -> str:
-        """
-        Analyse a user's natural-language message and extract structured
-        financial goal information: whether they intend to set a goal,
-        the goal name, target amount, target date, and current savings.
-
-        Provide the user's original message and today's date (YYYY-MM-DD).
-        Returns structured extraction results.
-        """
-        ref_date = date.fromisoformat(reference_date)
-        result, llm_succeeded = extract_goal_from_message(
-            user_message, today=ref_date, context=extractor_context,
-        )
-        tool_ctx["extraction"] = result
-        tool_ctx["extraction_llm_ok"] = llm_succeeded
-
-        return json.dumps({
-            "is_goal_intent": result.is_goal_intent,
-            "name": result.name,
-            "target_amount": result.target_amount,
-            "target_date": (
-                result.target_date.isoformat()
-                if result.target_date else None
-            ),
-            "current_amount": result.current_amount,
-            "missing_fields": result.missing_fields,
-        }, default=str)
-
-    @tool
     def create_goal_tool(
-        name: str,
-        target_amount: float,
-        target_date: str,
-        current_amount: float = 0.0,
+        goal_name: Annotated[
+            Optional[str],
+            Field(description=(
+                "Goal name inferred from the item mentioned. "
+                "Convert item references to fund names: 'a Mercedes' → 'Mercedes Fund', "
+                "'an iPhone' → 'iPhone Fund', 'a house deposit' → 'House Deposit Fund'. "
+                "Set to null only if no item or purpose is mentioned."
+            )),
+        ],
+        target_amount: Annotated[
+            Optional[float],
+            Field(description=(
+                "Target savings amount as a positive number. "
+                "Set to null only if the user has not mentioned an amount."
+            )),
+        ],
+        target_date_iso: Annotated[
+            Optional[str],
+            Field(description=(
+                "Target date as YYYY-MM-DD. Resolve date expressions in your reasoning "
+                "before calling: 'by the end of 2026' → '2026-12-31', "
+                "'by June' → last day of June, "
+                "'in 3 months' → last day of the month 3 months from today, "
+                "'next year' → December 31 of next year. "
+                "Set to null only if no date is mentioned."
+            )),
+        ],
+        current_amount: Annotated[
+            float,
+            Field(description="Amount already saved toward this goal. Use 0.0 if not mentioned."),
+        ] = 0.0,
+        is_update: Annotated[
+            bool,
+            Field(description=(
+                "Set to true when the user wants to modify an existing goal "
+                "(e.g. 'update my Mercedes goal to $60000'). "
+                "goal_name will be matched against existing goals by name."
+            )),
+        ] = False,
     ) -> str:
         """
-        Create a new FinancialGoal with the given parameters.
+        Validate goal parameters and create or update a FinancialGoal in a single step.
 
-        The goal's required monthly saving and on-track status will be
-        calculated automatically.  This tool validates that the target
-        amount is positive and the target date is in the future.
+        Call this once you have extracted all goal parameters from the user's message
+        in your own reasoning. Resolve all date expressions to YYYY-MM-DD before calling.
+        Do not call this tool more than once per user turn.
 
-        Returns the created goal as JSON.
+        Behaviour:
+        - If target_amount or target_date_iso is null (and is_update is false): returns
+          status 'missing_fields'. Do NOT call final_answer yet — tell the user which
+          fields are missing and ask for them.
+        - If all required fields are present and is_update is false: creates a new
+          FinancialGoal and returns status 'created'.
+        - If is_update is true: finds the matching existing goal by name and applies
+          provided updates, returning status 'updated'. If no match is found, returns
+          status 'error' with available goal names.
+
+        Returns JSON with 'status' ('created', 'updated', 'missing_fields', or 'error').
+
+        Do NOT call this tool for query intents (e.g. "what is my goal",
+        "show me my goals", "how are my savings going"). For queries, use the
+        existing goals listed in the system prompt context and produce an
+        end_turn response directly.
         """
-        parsed_date = date.fromisoformat(target_date)
+        missing: list[str] = []
+        if not is_update:
+            if target_amount is None:
+                missing.append("target_amount")
 
+        parsed_date: Optional[date] = None
+        if target_date_iso is not None:
+            try:
+                parsed_date = date.fromisoformat(target_date_iso)
+            except ValueError:
+                if not is_update:
+                    missing.append("target_date")
+        elif not is_update:
+            missing.append("target_date")
+
+        # Always store extraction so post-processing / clarification path can read it
+        extraction_result = GoalExtractionResult(
+            is_goal_intent=True,
+            name=goal_name,
+            target_amount=target_amount,
+            target_date=parsed_date,
+            current_amount=current_amount or 0.0,
+            missing_fields=missing,
+            is_update_intent=is_update,
+        )
+        tool_ctx["extraction"] = extraction_result
+        tool_ctx["extraction_llm_ok"] = True
+
+        if missing:
+            return json.dumps({
+                "status": "missing_fields",
+                "missing_fields": missing,
+                "extracted_so_far": {
+                    "goal_name": goal_name,
+                    "target_amount": target_amount,
+                    "target_date_iso": target_date_iso,
+                },
+            })
+
+        if is_update:
+            # Find matching goal by name (exact → substring → fuzzy word match)
+            target_name = (goal_name or "").lower()
+            matched: Optional[FinancialGoal] = None
+            for g in goals:
+                g_lower = g.name.lower()
+                if target_name and (target_name in g_lower or g_lower in target_name):
+                    matched = g
+                    break
+            if matched is None:
+                msg_lower = latest_message.lower()
+                for g in sorted(goals, key=lambda x: len(x.name), reverse=True):
+                    if any(w in msg_lower for w in g.name.lower().split() if len(w) > 2):
+                        matched = g
+                        break
+
+            if matched is None:
+                return json.dumps({
+                    "status": "error",
+                    "message": (
+                        f"No existing goal found matching '{goal_name}'. "
+                        f"Available goals: {[g.name for g in goals]}"
+                    ),
+                })
+
+            updated = matched.model_copy()
+            if target_amount is not None:
+                updated.target_amount = target_amount
+            if parsed_date is not None:
+                updated.target_date = parsed_date
+            if current_amount:
+                updated.current_amount = current_amount
+            if goal_name:
+                updated.name = goal_name
+
+            # In-place update so post-processing sees the modified list
+            for i, g in enumerate(goals):
+                if g.id == matched.id:
+                    goals[i] = updated
+                    break
+
+            tool_ctx["new_goal"] = updated
+            tool_ctx["new_goal_added"] = True
+            tool_ctx["updated_goal_id"] = matched.id
+
+            return json.dumps({
+                "status": "updated",
+                "goal": updated.model_dump(mode="json"),
+            }, default=str)
+
+        # Create new goal
         if target_amount <= 0:
-            return "Error: target_amount must be positive."
+            return json.dumps({"status": "error", "message": "target_amount must be positive."})
         if parsed_date <= today:
-            return (
-                f"Error: target_date {target_date} must be in the future. "
-                f"Today is {today.isoformat()}."
-            )
+            return json.dumps({
+                "status": "error",
+                "message": (
+                    f"target_date {target_date_iso} must be in the future "
+                    f"(today is {today.isoformat()})."
+                ),
+            })
 
         goal = FinancialGoal(
             id=f"goal-{uuid4().hex[:8]}",
-            name=name or "Financial Goal",
+            name=goal_name or "Financial Goal",
             target_amount=float(target_amount),
             current_amount=float(current_amount),
             target_date=parsed_date,
@@ -168,20 +278,25 @@ def run(view: AgentStateView) -> dict:
         tool_ctx["new_goal"] = goal
         tool_ctx["new_goal_added"] = True
 
-        return json.dumps(goal.model_dump(mode="json"), default=str)
+        return json.dumps({
+            "status": "created",
+            "goal": goal.model_dump(mode="json"),
+        }, default=str)
 
     @tool
     def calculate_required_saving_tool(
-        target_amount: float,
-        current_amount: float,
-        target_date_str: str,
+        target_amount: Annotated[float, Field(description="The total savings target amount.")],
+        current_amount: Annotated[float, Field(description="Amount already saved (use 0.0 if none).")],
+        target_date_str: Annotated[str, Field(description="Target date as YYYY-MM-DD.")],
     ) -> str:
         """
-        Calculate how much needs to be saved each month to reach a goal.
+        Calculate the monthly saving required to reach a financial goal on schedule.
 
-        Provide target_amount, current_amount (0 if none saved yet), and
-        target_date (YYYY-MM-DD).  Returns the required monthly saving
-        amount.  Useful for checking if a goal is on track.
+        Call this after create_goal_tool returns status 'created' or 'updated'.
+        Do not call this if create_goal_tool returned 'missing_fields' or 'error'.
+        Use the goal parameters (amount, current savings, date) from the tool response.
+
+        Returns the minimum monthly saving amount needed to meet the goal on time.
         """
         parsed_date = date.fromisoformat(target_date_str)
         dummy_goal = FinancialGoal(
@@ -195,18 +310,15 @@ def run(view: AgentStateView) -> dict:
         return f"Required monthly saving: {required:.2f}"
 
     # --- Build LLM with tools ---
-    model_name = resolve_model_name()
+    model_name = resolve_model_name("planner")
     llm = ChatAnthropic(
         model=model_name, timeout=30
     ).bind_tools([
-        extract_goal_tool,
         create_goal_tool,
         calculate_required_saving_tool,
-        shared_final_answer,
     ])
 
     tools_map: dict[str, Any] = {
-        "extract_goal_tool": extract_goal_tool,
         "create_goal_tool": create_goal_tool,
         "calculate_required_saving_tool": calculate_required_saving_tool,
     }
@@ -237,7 +349,15 @@ def run(view: AgentStateView) -> dict:
             f"{react_msg}"
         )
 
-    run_react_loop(
+    # Build recent conversation history for multi-turn continuations
+    # (e.g. user provides missing goal fields in a follow-up message)
+    all_msgs = view.get("messages") or []
+    history_msgs = [
+        m for m in all_msgs
+        if hasattr(m, 'type') and m.type in ('human', 'ai') and getattr(m, 'content', '')
+    ][:-1]  # Exclude the latest message (already in user_message below)
+
+    response, _ = run_react_loop(
         llm=llm,
         tools=tools_map,
         system_prompt=system_text,
@@ -250,6 +370,7 @@ def run(view: AgentStateView) -> dict:
             f"- Existing goals:\n{existing_goals_summary}"
         ),
         tool_ctx=tool_ctx,
+        history=history_msgs[-6:] if history_msgs else None,
     )
 
     # ------------------------------------------------------------------
@@ -258,123 +379,32 @@ def run(view: AgentStateView) -> dict:
     extraction: GoalExtractionResult | None = tool_ctx.get("extraction")
     new_goal_added = tool_ctx.get("new_goal_added", False)
 
-    # Post-processing fallback: if ReAct loop didn't extract, try directly
+    # Fallback: create_goal_tool was never called (model non-compliance)
     if extraction is None and latest_message.strip():
+        logger.warning("[goal_planning] create_goal_tool not called — running extraction fallback")
         result, ok = extract_goal_from_message(
             latest_message, today=today, context=extractor_context,
         )
         tool_ctx["extraction"] = result
         tool_ctx["extraction_llm_ok"] = ok
         extraction = result
-
-    # ------------------------------------------------------------------
-    # Update intent — modify an existing goal instead of creating new
-    # ------------------------------------------------------------------
-    if (
-        extraction is not None
-        and extraction.is_update_intent
-        and goals
-        and not new_goal_added
-    ):
-        # Try to match extraction name against existing goal names
-        target_name = (extraction.name or "").lower()
-        matched_goal = None
-        for g in goals:
-            g_name = g.name.lower()
-            if target_name and (target_name in g_name or g_name in target_name):
-                matched_goal = g
-                break
-
-        # If no name match, try fuzzy-match against the user message
-        if matched_goal is None:
-            msg_lower = latest_message.lower()
-            for g in sorted(goals, key=lambda x: len(x.name), reverse=True):
-                g_name = g.name.lower()
-                # Check if any word from the goal name appears in the message
-                name_words = [w for w in g_name.split() if len(w) > 2]
-                if any(w in msg_lower for w in name_words):
-                    matched_goal = g
-                    break
-
-        if matched_goal is not None:
-            logger.debug(
-                "[goal_planning] Update intent matched goal '%s'", matched_goal.name
+        if (
+            result.is_goal_intent
+            and not result.is_update_intent
+            and not result.missing_fields
+            and result.target_amount is not None
+            and result.target_date is not None
+        ):
+            goal = FinancialGoal(
+                id=f"goal-{uuid4().hex[:8]}",
+                name=result.name or "Financial Goal",
+                target_amount=result.target_amount,
+                current_amount=result.current_amount or 0.0,
+                target_date=result.target_date,
             )
-            updated = matched_goal.model_copy()
-            if extraction.target_amount is not None:
-                updated.target_amount = extraction.target_amount
-            if extraction.target_date is not None:
-                updated.target_date = extraction.target_date
-            if extraction.current_amount is not None:
-                updated.current_amount = extraction.current_amount
-            if extraction.name:
-                updated.name = extraction.name
-
-            tool_ctx["new_goal"] = updated
+            tool_ctx["new_goal"] = goal
             tool_ctx["new_goal_added"] = True
-            tool_ctx["updated_goal_id"] = matched_goal.id
             new_goal_added = True
-            # Replace the old goal with the updated one in the goals list
-            goals = [updated if g.id == matched_goal.id else g for g in goals]
-
-    # ReAct fallback: extraction succeeded but LLM skipped create_goal_tool
-    # (e.g. LLM went straight to final_answer after extracting).
-    # Create the goal directly from extraction results.
-    if (
-        extraction is not None
-        and extraction.is_goal_intent
-        and not extraction.is_update_intent
-        and not extraction.missing_fields
-        and not new_goal_added
-        and extraction.target_amount is not None
-        and extraction.target_date is not None
-    ):
-        logger.warning(
-            "[goal_planning] ReAct loop skipped create_goal_tool "
-            "- creating goal from extraction directly"
-        )
-        goal = FinancialGoal(
-            id=f"goal-{uuid4().hex[:8]}",
-            name=extraction.name or "Financial Goal",
-            target_amount=extraction.target_amount,
-            current_amount=extraction.current_amount or 0.0,
-            target_date=extraction.target_date,
-        )
-        tool_ctx["new_goal"] = goal
-        tool_ctx["new_goal_added"] = True
-        new_goal_added = True
-
-    # Handle clarification path (missing goal fields)
-    if extraction and extraction.is_goal_intent and extraction.missing_fields:
-        pending_confirmation = {
-            "action": "clarify_goal_planning",
-            "agent": "goal_planning",
-            "summary": (
-                "I detected a financial goal request, but some required "
-                "information is missing."
-            ),
-            "details": [
-                f"Detected goal name: {extraction.name or 'N/A'}",
-                f"Missing fields: {', '.join(extraction.missing_fields)}",
-                "Please confirm or provide the missing details.",
-            ],
-            "goal_extraction_confidence": (
-                "llm" if tool_ctx.get("extraction_llm_ok") else "fallback"
-            ),
-        }
-        # Don't add the goal since fields are missing
-        clarification_msg = (
-            f"I detected a financial goal request, but some information is missing. "
-            f"Goal name: {extraction.name or 'N/A'}. "
-            f"Missing: {', '.join(extraction.missing_fields)}."
-        )
-        if extraction.target_amount is not None:
-            clarification_msg += f" Target amount: {extraction.target_amount}."
-        return {
-            "goals": goals,
-            "pending_confirmation": pending_confirmation,
-            "messages": [AIMessage(content=clarification_msg)],
-        }
 
     # If a new goal was created, add it to the list.
     # Skip append for updates — the goal was already replaced in-place.
@@ -409,14 +439,23 @@ def run(view: AgentStateView) -> dict:
             creation_lines.append(line)
 
     # Build HITL confirmation
-    summary_text = tool_ctx.get(
-        "summary",
-        (
-            f"{'Created and e' if new_goal_added else 'E'}valuated "
-            f"{len(final_goals)} financial goal(s). "
-            f"Monthly surplus = {monthly_surplus:.2f}."
-        ),
+    default_fallback = (
+        f"{'Created and e' if new_goal_added else 'E'}valuated "
+        f"{len(final_goals)} financial goal(s). "
+        f"Monthly surplus = {monthly_surplus:.2f}."
     )
+    raw_content = response.content
+    if isinstance(raw_content, str):
+        summary_text = raw_content.strip() or default_fallback
+    elif isinstance(raw_content, list):
+        # Claude sometimes returns content as a list of blocks; extract plain text.
+        texts = [
+            block.get("text", "") for block in raw_content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        summary_text = " ".join(texts).strip() or default_fallback
+    else:
+        summary_text = default_fallback
 
     pending_confirmation = {}
     if new_goal_added:

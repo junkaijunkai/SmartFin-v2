@@ -351,7 +351,7 @@ def test_budget_planning_node_end_to_end(mock_react):
                 "transport": {"spent": 60.0, "budget": 200.0, "status": "on_track"},
             }
             tool_ctx["warnings"] = []
-        return MagicMock(), []
+        return MagicMock(content="Budget plan created for food and transport."), []
 
     mock_react.side_effect = side
 
@@ -385,8 +385,8 @@ def test_budget_planning_node_end_to_end(mock_react):
 
 
 @patch("app.agents.budget_planning.agent.run_react_loop")
-def test_budget_planning_node_needs_clarification_sets_pending_confirmation(mock_react):
-    """When extract indicates missing income, the agent should produce a HITL clarification."""
+def test_budget_planning_node_needs_clarification_returns_llm_response(mock_react):
+    """When income is missing the LLM asks the user in its end_turn text — no HITL triggered."""
 
     def side(tool_ctx=None, **kw):
         if tool_ctx is not None:
@@ -396,7 +396,7 @@ def test_budget_planning_node_needs_clarification_sets_pending_confirmation(mock
                 "categories_requested": [],
                 "needs_clarification": True,
             }
-        return MagicMock(), []
+        return MagicMock(content="Could you share your monthly income so I can create your budget?"), []
 
     mock_react.side_effect = side
 
@@ -409,13 +409,10 @@ def test_budget_planning_node_needs_clarification_sets_pending_confirmation(mock
 
     result = _run_budget(state)
 
-    assert result["budget_summary"] == "More information is needed before generating a budget plan."
+    assert isinstance(result["budget_summary"], str)
+    assert "income" in result["budget_summary"].lower()
     assert result["budget_warnings"] == []
-    assert result["budget_progress"] == {}
-    pc = result["pending_confirmation"]
-    assert pc is not None
-    assert pc["action"] == "clarify_budget_planning"
-    assert pc["agent"] == "budget_planning"
+    assert result.get("pending_confirmation") is None
 
 
 @patch("app.agents.budget_planning.agent.run_react_loop")

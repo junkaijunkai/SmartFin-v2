@@ -404,74 +404,63 @@ class TestHealthAssessmentAgentNode:
     def _run(self, state: dict) -> dict:
         return health_run(AgentStateView(state, "health_assessment"))
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_writes_health_summary_to_state(self, mock_react):
+    @patch("app.agents.health_assessment.agent.assess_health")
+    def test_writes_health_summary_to_state(self, mock_assess):
         from app.state import HealthSummary, HealthRating
 
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["health_summary"] = HealthSummary(
-                    rating=HealthRating.GOOD,
-                    debt_to_income_ratio=0.0,
-                    liquid_reserve_months=0.0,
-                    income_concentration_risk=False,
-                    sustained_overspending=False,
-                )
-                tool_ctx["new_alerts"] = []
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        mock_assess.return_value = (
+            HealthSummary(
+                rating=HealthRating.GOOD,
+                debt_to_income_ratio=0.0,
+                liquid_reserve_months=0.0,
+                income_concentration_risk=False,
+                sustained_overspending=False,
+            ),
+            [],
+        )
         result = self._run({"transactions": [_housing(100)], "monthly_income": 3000.0, "messages": []})
 
         assert "health_summary" in result
         assert result["health_summary"] is not None
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_writes_alerts_to_state(self, mock_react):
+    @patch("app.agents.health_assessment.agent.assess_health")
+    def test_writes_alerts_to_state(self, mock_assess):
         from app.state import HealthSummary, HealthRating
 
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["health_summary"] = HealthSummary(
-                    rating=HealthRating.GOOD,
-                    debt_to_income_ratio=0.0,
-                    liquid_reserve_months=0.0,
-                    income_concentration_risk=False,
-                    sustained_overspending=False,
-                )
-                tool_ctx["new_alerts"] = []
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        mock_assess.return_value = (
+            HealthSummary(
+                rating=HealthRating.GOOD,
+                debt_to_income_ratio=0.0,
+                liquid_reserve_months=0.0,
+                income_concentration_risk=False,
+                sustained_overspending=False,
+            ),
+            [],
+        )
         result = self._run({"transactions": [_housing(100)], "monthly_income": 3000.0, "messages": []})
 
         assert "alerts" in result
         assert isinstance(result["alerts"], list)
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_empty_state_does_not_raise(self, mock_react):
+    def test_empty_state_does_not_raise(self):
         result = self._run({"monthly_income": 0})
-        # No transactions + no income → returns early without calling ReAct loop
-        mock_react.assert_not_called()
+        # No transactions + no income → returns early without calling assess_health
         assert "health_summary" in result
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_prefers_categorised_transactions(self, mock_react):
+    @patch("app.agents.health_assessment.agent.assess_health")
+    def test_prefers_categorised_transactions(self, mock_assess):
         from app.state import HealthSummary, HealthRating
 
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["health_summary"] = HealthSummary(
-                    rating=HealthRating.GOOD,
-                    debt_to_income_ratio=round(600 / 3000, 4),
-                    liquid_reserve_months=0.0,
-                    income_concentration_risk=False,
-                    sustained_overspending=False,
-                )
-                tool_ctx["new_alerts"] = []
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        mock_assess.return_value = (
+            HealthSummary(
+                rating=HealthRating.GOOD,
+                debt_to_income_ratio=round(600 / 3000, 4),
+                liquid_reserve_months=0.0,
+                income_concentration_risk=False,
+                sustained_overspending=False,
+            ),
+            [],
+        )
 
         categorised = [_housing(600), _income(3000)]
         result = self._run({
@@ -482,23 +471,20 @@ class TestHealthAssessmentAgentNode:
         })
         assert result["health_summary"].debt_to_income_ratio == round(600 / 3000, 4)
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_falls_back_to_raw_transactions(self, mock_react):
+    @patch("app.agents.health_assessment.agent.assess_health")
+    def test_falls_back_to_raw_transactions(self, mock_assess):
         from app.state import HealthSummary, HealthRating
 
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["health_summary"] = HealthSummary(
-                    rating=HealthRating.GOOD,
-                    debt_to_income_ratio=round(600 / 3000, 4),
-                    liquid_reserve_months=0.0,
-                    income_concentration_risk=False,
-                    sustained_overspending=False,
-                )
-                tool_ctx["new_alerts"] = []
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        mock_assess.return_value = (
+            HealthSummary(
+                rating=HealthRating.GOOD,
+                debt_to_income_ratio=round(600 / 3000, 4),
+                liquid_reserve_months=0.0,
+                income_concentration_risk=False,
+                sustained_overspending=False,
+            ),
+            [],
+        )
 
         raw = [_housing(600), _income(3000)]
         result = self._run({
@@ -508,30 +494,26 @@ class TestHealthAssessmentAgentNode:
         })
         assert result["health_summary"].debt_to_income_ratio == round(600 / 3000, 4)
 
-    @patch("app.agents.health_assessment.agent.run_react_loop")
-    def test_merges_existing_alerts(self, mock_react):
+    @patch("app.agents.health_assessment.agent.assess_health")
+    def test_merges_existing_alerts(self, mock_assess):
         from app.state import HealthSummary, HealthRating, Alert, AlertSeverity
 
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["health_summary"] = HealthSummary(
-                    rating=HealthRating.POOR,
-                    debt_to_income_ratio=5000 / 3000,
-                    liquid_reserve_months=0.0,
-                    income_concentration_risk=False,
-                    sustained_overspending=True,
-                )
-                tool_ctx["new_alerts"] = [
-                    Alert(
-                        id="new-1",
-                        severity=AlertSeverity.CRITICAL,
-                        source_agent="health_assessment",
-                        message="Financial health is POOR.",
-                    )
-                ]
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        new_alert = Alert(
+            id="new-1",
+            severity=AlertSeverity.CRITICAL,
+            source_agent="health_assessment",
+            message="Financial health is POOR.",
+        )
+        mock_assess.return_value = (
+            HealthSummary(
+                rating=HealthRating.POOR,
+                debt_to_income_ratio=5000 / 3000,
+                liquid_reserve_months=0.0,
+                income_concentration_risk=False,
+                sustained_overspending=True,
+            ),
+            [new_alert],
+        )
 
         existing = Alert(
             id="existing-1",
@@ -600,7 +582,7 @@ class TestGenerateAdvisory:
         llm.with_structured_output.assert_called_once_with(_AdvisoryResult)
 
     def test_reads_model_from_env(self, monkeypatch):
-        monkeypatch.setenv("SMARTFIN_MODEL", "claude-haiku-4-5-20251001")
+        """_generate_advisory uses the 'default' alias, which resolves to claude-haiku-4-5."""
         captured = {}
 
         def _capture_model(*args, **kwargs):
@@ -609,7 +591,7 @@ class TestGenerateAdvisory:
 
         monkeypatch.setattr("app.agents.health_assessment.assessor.ChatAnthropic", _capture_model)
         _generate_advisory(**self._metrics())
-        assert captured["model"] == "claude-haiku-4-5-20251001"
+        assert captured["model"] == "claude-haiku-4-5"
 
     def test_default_model_when_env_unset(self, monkeypatch):
         monkeypatch.delenv("SMARTFIN_MODEL", raising=False)

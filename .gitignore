@@ -19,15 +19,6 @@ venv/
 .idea/
 .windsurf/
 
-# Development documents (not relevant to external users)
-.claude/
-CLAUDE.md
-CODESTYLE.md
-CONTRIBUTING.md
-app/agents/README.md
-app/orchestrator/README.md
-tests/README.md
-ui/README.md
 
 # Evaluation tool artifacts
 .deepeval/
@@ -35,6 +26,10 @@ ui/README.md
 # Runtime data (memory, caches, Chatbot SQLite stores)
 .smartfin/
 .smartfin_cache/
+.smartfin_memory/
+
+# Node.js
+node_modules/
 
 # Test & coverage artifacts
 .coverage

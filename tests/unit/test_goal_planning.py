@@ -97,6 +97,35 @@ def test_fallback_extract_emergency():
     assert result.name == "Emergency Fund"
 
 
+def test_normalize_missing_fields_clears_llm_hallucination():
+    """When LLM extracts all required fields but still puts them in missing_fields,
+    _normalize_missing_fields must overwrite with the correct empty list."""
+    from app.agents.goal_planning.extractor import _normalize_missing_fields
+    result = GoalExtractionResult(
+        is_goal_intent=True,
+        name="Mercedes Fund",
+        target_amount=5000.0,
+        target_date=date(2026, 12, 31),
+        missing_fields=["target_date"],  # LLM hallucination
+    )
+    _normalize_missing_fields(result)
+    assert result.missing_fields == []
+
+
+def test_normalize_missing_fields_detects_truly_missing():
+    """When a field is genuinely None, it must appear in missing_fields."""
+    from app.agents.goal_planning.extractor import _normalize_missing_fields
+    result = GoalExtractionResult(
+        is_goal_intent=True,
+        name="Mercedes Fund",
+        target_amount=5000.0,
+        target_date=None,
+        missing_fields=[],  # LLM incorrectly says nothing is missing
+    )
+    _normalize_missing_fields(result)
+    assert result.missing_fields == ["target_date"]
+
+
 def test_extract_empty_input():
     result, ok = extract_goal_from_message("   ")
     assert ok is True and result.is_goal_intent is False
@@ -294,7 +323,8 @@ def test_agent_marks_goal_behind_schedule(mock_react):
 
 
 @patch("app.agents.goal_planning.agent.run_react_loop")
-def test_agent_returns_clarification_when_fields_missing(mock_react):
+def test_agent_no_hitl_when_fields_missing(mock_react):
+    """When goal fields are missing the LLM asks in its end_turn text — no HITL triggered."""
     mock_react.side_effect = _mock_react({
         "extraction": GoalExtractionResult(
             is_goal_intent=True, name="Laptop Fund",
@@ -311,10 +341,7 @@ def test_agent_returns_clarification_when_fields_missing(mock_react):
     result = _run_with_state(state)
 
     assert result.get("goals", []) == []
-    pc = result["pending_confirmation"]
-    assert pc["action"] == "clarify_goal_planning"
-    assert pc["goal_extraction_confidence"] == "fallback"
-    assert "Missing fields: target_amount, target_date" in pc["details"][1]
+    assert result.get("pending_confirmation") is None
 
 
 @patch("app.agents.goal_planning.agent.run_react_loop")

@@ -114,8 +114,7 @@ def _normalize_missing_fields(result: GoalExtractionResult) -> None:
         computed.append("target_amount")
     if result.target_date is None:
         computed.append("target_date")
-    if computed:
-        result.missing_fields = computed
+    result.missing_fields = computed
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +294,7 @@ def extract_goal_from_message(
     today = today or date.today()
 
     # 允许通过环境变量覆盖模型名，但不再在生产代码里放 mock mode
-    model_name = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5"))
+    model_name = resolve_model_name("planner")
 
     try:
         chat_signature = inspect.signature(ChatAnthropic)

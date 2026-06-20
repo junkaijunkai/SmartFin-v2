@@ -3,12 +3,12 @@ Expense Analysis agent — LangGraph node entry point with ReAct loop.
 
 Transformed from a single-pass function into a ReAct agent that reasons about
 the available data, calls tools to categorise transactions and compute trends,
-and produces a structured final answer.
+and produces a natural-language answer.
 
 Responsibilities:
   1. Pre-process: extract transactions from user message, merge with state.
   2. ReAct loop: LLM reasons → calls categorise → observes → calls compute
-     trends → observes → calls final_answer.
+     trends → observes → produces end_turn text response.
   3. Post-process: read tool_ctx and build AppState updates + HITL payload.
 """
 
@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Annotated, Any
+from pydantic import Field
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -25,7 +26,7 @@ from langchain_anthropic import ChatAnthropic
 
 from app.state import SpendingTrend, Transaction
 from app.orchestrator.state_view import AgentStateView
-from app.agents.react_utils import run_react_loop, final_answer as shared_final_answer
+from app.agents.react_utils import run_react_loop
 from app.agents.expense_analysis.categoriser import categorise_transactions
 from app.agents.expense_analysis.analyser import compute_spending_trends
 from app.agents.expense_analysis.extractor import extract_transaction_from_message
@@ -110,15 +111,27 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
 
     @tool
     def categorise_transactions_tool(
-        transactions: list[dict],
+        transactions: Annotated[
+            list[dict],
+            Field(description=(
+                "List of raw, uncategorised transaction objects. Each object must include "
+                "'id' (str), 'amount' (float), 'description' (str), 'merchant' (str), "
+                "and 'date' (YYYY-MM-DD). Pass ONLY transactions that have not yet been "
+                "categorised — do not re-pass items already returned by a prior call."
+            )),
+        ],
     ) -> str:
         """
-        Categorise a list of raw transactions by assigning a spending category
-        (food, transport, housing, entertainment, etc.) to each one.
+        Assign a spending category to each raw transaction and return the categorised list.
 
-        The input should be a JSON array of transaction objects, each with
-        'id', 'amount', 'description', and 'merchant' fields.  Returns the
-        same list with the 'category' field populated.
+        Call this once per agent turn for all new transactions that lack a 'category' field.
+        Do not pass transactions already present in the categorised state — those are merged
+        in automatically. Valid categories: food, transport, housing, entertainment,
+        healthcare, education, shopping, utilities, income, savings, other.
+
+        Returns the newly categorised transactions with 'category' populated. The stored
+        result merges with previously categorised transactions held in state. If the LLM
+        categorisation fails, a keyword-based fallback assigns best-guess categories.
         """
         txns = _deserialise_transactions(transactions)
         categorised, llm_ok = categorise_transactions(txns)
@@ -131,15 +144,27 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
 
     @tool
     def compute_spending_trends_tool(
-        categorised: list[dict],
+        categorised: Annotated[
+            list[dict],
+            Field(description=(
+                "Complete list of categorised transactions to analyse — both newly "
+                "categorised and those already in state. Each object must have 'category' "
+                "(str), 'amount' (float), and 'date' (YYYY-MM-DD). Do not pass raw "
+                "uncategorised transactions; call categorise_transactions_tool first."
+            )),
+        ],
     ) -> str:
         """
-        Compute 30-day spending trends from a list of categorised transactions.
+        Compute 30-day spending trends from the full set of categorised transactions.
 
-        The input should be a JSON array of categorised transaction objects
-        (each with 'category', 'amount', 'date' fields).  Returns a JSON
-        array of trend objects, each with 'category', 'current_period_total',
-        'previous_period_total', and 'deviation_pct'.
+        Call this after categorise_transactions_tool has returned. Pass the complete
+        merged list of categorised transactions (new + existing from state), not just
+        the newly categorised ones. Do not call this if there are no categorised
+        transactions available.
+
+        Returns one trend object per spending category with: 'category',
+        'current_period_total', 'previous_period_total', and 'deviation_pct'
+        (positive = spending rose vs. prior 30 days; negative = fell; null = no prior data).
         """
         txns = _deserialise_transactions(categorised)
         trends = compute_spending_trends(txns)
@@ -152,7 +177,7 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
     model_name = resolve_model_name()
     llm = ChatAnthropic(
         model=model_name, timeout=30
-    ).bind_tools([categorise_transactions_tool, compute_spending_trends_tool, shared_final_answer])
+    ).bind_tools([categorise_transactions_tool, compute_spending_trends_tool])
 
     tools_map: dict[str, Any] = {
         "categorise_transactions_tool": categorise_transactions_tool,
@@ -169,8 +194,14 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
     # --- User message ---
     user_msg = messages[-1].content if messages else ""
 
+    # --- Build recent conversation history for multi-turn context ---
+    history_msgs = [
+        m for m in (messages or [])
+        if hasattr(m, 'type') and m.type in ('human', 'ai') and getattr(m, 'content', '')
+    ][:-1]  # Exclude the latest message (already in user_message)
+
     # --- Run ReAct loop ---
-    run_react_loop(
+    response, _ = run_react_loop(
         llm=llm,
         tools=tools_map,
         system_prompt=system,
@@ -181,6 +212,7 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
             f"New transactions: {json.dumps(_serialise_transactions(to_categorise), default=str)}"
         ),
         tool_ctx=tool_ctx,
+        history=history_msgs[-6:] if history_msgs else None,
     )
 
     # ------------------------------------------------------------------
@@ -194,7 +226,12 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
     )
     llm_ok = tool_ctx.get("categorise_llm_ok", True)
 
-    return _build_result(categorised, trends, llm_ok, tool_ctx)
+    default_summary = (
+        f"Categorised {len(categorised)} transactions across "
+        f"{len(trends)} spending categories."
+    )
+    summary_text = response.content or default_summary
+    return _build_result(categorised, trends, llm_ok, tool_ctx, summary_text)
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +244,7 @@ def _build_result(
     trends: list[SpendingTrend],
     llm_succeeded: bool,
     tool_ctx: dict | None = None,
+    summary_text: str = "",
 ) -> dict:
     """Build the HITL confirmation and state update from tool results."""
     trend_lines: list[str] = []
@@ -223,15 +261,8 @@ def _build_result(
                 f"  ({sign}{t.deviation_pct:.1f}% vs prev period)"
             )
 
-    # Use ReAct summary if available, otherwise build default
-    summary_text = (tool_ctx or {}).get(
-        "summary",
-        (
-            f"Categorised {len(categorised)} transactions across "
-            f"{len(trends)} spending categories."
-        ),
-    )
-    needs_hitl = (tool_ctx or {}).get("needs_hitl", True)
+    # HITL fires whenever categorisation actually ran
+    needs_hitl = bool((tool_ctx or {}).get("categorised"))
 
     pending_confirmation = None
     if needs_hitl:

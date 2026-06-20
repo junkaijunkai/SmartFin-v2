@@ -313,7 +313,7 @@ def _generate_advisory(
     the LLM is unavailable — the caller falls back to _build_observations().
     """
     try:
-        model_name = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5"))
+        model_name = resolve_model_name("default")
         llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT ,temperature=0.7)
         structured_llm = llm.with_structured_output(_AdvisoryResult)
     except Exception as exc:

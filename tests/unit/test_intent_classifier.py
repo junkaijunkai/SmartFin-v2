@@ -92,8 +92,8 @@ class TestClassifyIntent:
 
     @patch("app.orchestrator.intent_classifier.get_cached_llm_response", return_value=None)
     @patch("app.orchestrator.intent_classifier.ChatAnthropic")
-    def test_classify_intent_uses_correct_model(self, mock_llm_class, mock_cache, monkeypatch):
-        """classify_intent uses SMARTFIN_MODEL env var, defaults to haiku."""
+    def test_classify_intent_uses_correct_model(self, mock_llm_class, mock_cache):
+        """classify_intent uses the 'intent' alias, which resolves to claude-opus-4-8."""
         mock_llm = MagicMock()
         mock_llm_class.return_value = mock_llm
         mock_structured = MagicMock()
@@ -102,16 +102,8 @@ class TestClassifyIntent:
             agent="expense_analysis", reasoning="test"
         )
 
-        # Test with env var set
-        monkeypatch.setenv("SMARTFIN_MODEL", "claude-opus-4-7")
         classify_intent("test message")
-        mock_llm_class.assert_called_with(model="claude-opus-4-7")
-
-        # Reset and test default
-        mock_llm_class.reset_mock()
-        monkeypatch.delenv("SMARTFIN_MODEL")
-        classify_intent("test message")
-        mock_llm_class.assert_called_with(model="claude-haiku-4-5")
+        mock_llm_class.assert_called_with(model="claude-opus-4-8")
 
     @patch("app.orchestrator.intent_classifier.ChatAnthropic")
     def test_classify_intent_falls_back_to_keyword_on_exception(self, mock_llm_class):

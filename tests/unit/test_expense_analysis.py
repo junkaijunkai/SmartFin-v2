@@ -386,10 +386,8 @@ class TestExpenseAnalysisAgentNode:
                 if tool_ctx is not None:
                     tool_ctx["categorised"] = categorised
                     tool_ctx["trends"] = trends
-                    tool_ctx["summary"] = "Categorised 2 transactions."
-                    tool_ctx["needs_hitl"] = True
                     tool_ctx["categorise_llm_ok"] = True
-                return Mock(), []
+                return Mock(content="Categorised 2 transactions."), []
 
             mock_loop.side_effect = side
             result = self._run(self._make_state(txs))
@@ -411,9 +409,8 @@ class TestExpenseAnalysisAgentNode:
                 if tool_ctx is not None:
                     tool_ctx["categorised"] = txs
                     tool_ctx["trends"] = trends
-                    tool_ctx["needs_hitl"] = True
                     tool_ctx["categorise_llm_ok"] = True
-                return Mock(), []
+                return Mock(content="Analysed 1 transaction."), []
 
             mock_loop.side_effect = side
             result = self._run(self._make_state(txs))
@@ -449,10 +446,8 @@ class TestExpenseAnalysisAgentNode:
                 if tool_ctx is not None:
                     tool_ctx["categorised"] = txs
                     tool_ctx["trends"] = compute_spending_trends(txs)
-                    tool_ctx["summary"] = "Categorised 1 transaction."
-                    tool_ctx["needs_hitl"] = True
                     tool_ctx["categorise_llm_ok"] = True
-                return Mock(), []
+                return Mock(content="Categorised 1 transaction."), []
 
             mock_loop.side_effect = side
             state = self._make_state(txs)
@@ -487,7 +482,7 @@ class TestExpenseAnalysisAgentNode:
                     merged = [existing] + [_tx("n1", 5, 50.0, TransactionCategory.FOOD)]
                     tool_ctx["categorised"] = merged
                     tool_ctx["trends"] = compute_spending_trends(merged)
-                return Mock(), []
+                return Mock(content="Merged and categorised 2 transactions."), []
 
             mock_loop.side_effect = side
 
@@ -513,7 +508,7 @@ class TestExpenseAnalysisAgentNode:
                     merged = [existing_tx1, existing_tx2] + [_tx("n1", 5, 50.0, TransactionCategory.FOOD)]
                     tool_ctx["categorised"] = merged
                     tool_ctx["trends"] = compute_spending_trends(merged)
-                return Mock(), []
+                return Mock(content="Merged and categorised 3 transactions."), []
 
             mock_loop.side_effect = side
 
@@ -556,8 +551,7 @@ class TestExpenseAnalysisAgentNode:
                     tool_ctx["categorised"] = txs
                     tool_ctx["trends"] = compute_spending_trends(txs)
                     tool_ctx["categorise_llm_ok"] = True
-                    tool_ctx["needs_hitl"] = True
-                return Mock(), []
+                return Mock(content="Spending analysis complete."), []
 
             mock_loop.side_effect = side
             result = self._run(self._make_state(txs))
@@ -585,8 +579,7 @@ class TestExpenseAnalysisAgentNode:
                     tool_ctx["categorised"] = txs
                     tool_ctx["trends"] = compute_spending_trends(txs)
                     tool_ctx["categorise_llm_ok"] = True
-                    tool_ctx["needs_hitl"] = True
-                return Mock(), []
+                return Mock(content="Trend analysis complete."), []
 
             mock_loop.side_effect = side
             result = self._run(self._make_state(txs))

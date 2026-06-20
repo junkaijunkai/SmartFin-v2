@@ -29,6 +29,28 @@
         "evaluation",
         "offline_red_team"
       ]
+    },
+    "intent": {
+      "provider": "anthropic",
+      "model": "claude-opus-4-8",
+      "version": "2026-06",
+      "stage": "prod",
+      "owner": "ml-platform",
+      "risk_tier": "high",
+      "use_cases": [
+        "intent_classification"
+      ]
+    },
+    "planner": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "version": "2026-06",
+      "stage": "prod",
+      "owner": "ml-platform",
+      "risk_tier": "medium",
+      "use_cases": [
+        "goal_planning"
+      ]
     }
   }
 }

@@ -210,49 +210,27 @@ class TestAnomalyDetectionAgentNode:
     def _run(self, state: dict) -> dict:
         return anomaly_run(AgentStateView(state, "anomaly_detection"))
 
-    @patch("app.agents.anomaly_detection.agent.run_react_loop")
-    def test_writes_anomaly_flags_to_state(self, mock_react):
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["anomaly_flags"] = []
-                tool_ctx["explanation"] = "No anomalous transactions detected."
-            return MagicMock(), []
-
-        mock_react.side_effect = side
-        result = self._run({"transactions": [], "messages": []})
+    @patch("app.agents.anomaly_detection.agent.extract_and_detect")
+    def test_writes_anomaly_flags_to_state(self, mock_detect):
+        mock_detect.return_value = ([], "No anomalous transactions detected.")
+        result = self._run({"transactions": [_txn(10.0)], "messages": []})
 
         assert "anomaly_flags" in result
         assert "anomaly_explanation" in result
         assert isinstance(result["anomaly_flags"], list)
 
-    @patch("app.agents.anomaly_detection.agent.run_react_loop")
-    def test_empty_state_returns_empty_flags(self, mock_react):
-
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["anomaly_flags"] = []
-                tool_ctx["explanation"] = "No transactions available to scan."
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+    def test_empty_state_returns_empty_flags(self):
+        # No transactions → early return without calling extract_and_detect
         result = self._run({})
         assert result["anomaly_flags"] == []
 
-    @patch("app.agents.anomaly_detection.agent.run_react_loop")
-    def test_prefers_categorised_transactions(self, mock_react):
+    @patch("app.agents.anomaly_detection.agent.extract_and_detect")
+    def test_prefers_categorised_transactions(self, mock_detect):
         """When both keys are present, categorised_transactions takes priority."""
         outlier = _txn(500.0, category=TransactionCategory.FOOD, txn_id="outlier")
-
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["anomaly_flags"] = [
-                    AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
-                                explanation="test")
-                ]
-                tool_ctx["explanation"] = "Found 1 anomaly."
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        flag = AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
+                           explanation="test")
+        mock_detect.return_value = ([flag], "Found 1 anomaly.")
 
         food_normals = _food_batch([10, 11, 12, 13, 14])
         state = {
@@ -264,20 +242,13 @@ class TestAnomalyDetectionAgentNode:
 
         assert any(f.transaction_id == "outlier" for f in result["anomaly_flags"])
 
-    @patch("app.agents.anomaly_detection.agent.run_react_loop")
-    def test_falls_back_to_raw_transactions(self, mock_react):
+    @patch("app.agents.anomaly_detection.agent.extract_and_detect")
+    def test_falls_back_to_raw_transactions(self, mock_detect):
         """When categorised_transactions is absent, raw transactions are used."""
         outlier = _txn(500.0, category=TransactionCategory.FOOD, txn_id="outlier")
-
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["anomaly_flags"] = [
-                    AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
-                                explanation="test")
-                ]
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        flag = AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
+                           explanation="test")
+        mock_detect.return_value = ([flag], "Found 1 anomaly.")
 
         state = {
             "transactions": _food_batch([10, 11, 12, 13, 14]) + [outlier],
@@ -286,20 +257,13 @@ class TestAnomalyDetectionAgentNode:
         result = self._run(state)
         assert any(f.transaction_id == "outlier" for f in result["anomaly_flags"])
 
-    @patch("app.agents.anomaly_detection.agent.run_react_loop")
-    def test_falls_back_when_categorised_is_empty_list(self, mock_react):
+    @patch("app.agents.anomaly_detection.agent.extract_and_detect")
+    def test_falls_back_when_categorised_is_empty_list(self, mock_detect):
         """An empty categorised_transactions triggers fallback to raw transactions."""
         outlier = _txn(500.0, category=TransactionCategory.FOOD, txn_id="outlier")
-
-        def side(tool_ctx=None, **kw):
-            if tool_ctx is not None:
-                tool_ctx["anomaly_flags"] = [
-                    AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
-                                explanation="test")
-                ]
-            return MagicMock(), []
-
-        mock_react.side_effect = side
+        flag = AnomalyFlag(transaction_id="outlier", anomaly_type=AnomalyType.UNUSUAL_AMOUNT,
+                           explanation="test")
+        mock_detect.return_value = ([flag], "Found 1 anomaly.")
 
         state = {
             "transactions": _food_batch([10, 11, 12, 13, 14]) + [outlier],

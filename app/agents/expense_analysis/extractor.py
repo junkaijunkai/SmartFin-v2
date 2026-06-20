@@ -59,7 +59,7 @@ def extract_transaction_from_message(
         return [Transaction(**t) for t in cached.get("transactions", [])]
 
     try:
-        model = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5-20251001"))
+        model = resolve_model_name("default")
         llm = ChatAnthropic(model=model)
         prompt_messages = get_prompt("transaction_extractor").format_messages(message=message)
         result: _TxnExtract = llm.with_structured_output(_TxnExtract).invoke(prompt_messages)

@@ -115,7 +115,7 @@ def _generate_explanations(
         flagged_transactions_text="---\n".join(lines)
     )
 
-    model_name = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5"))
+    model_name = resolve_model_name("default")
 
     try:
         llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT)

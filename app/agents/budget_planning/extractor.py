@@ -51,7 +51,7 @@ def extract_budget_request(
     # fallback income from state
     state_income = state.get("monthly_income")
 
-    model_name = resolve_model_name(os.getenv("SMARTFIN_MODEL", "claude-haiku-4-5"))
+    model_name = resolve_model_name("default")
 
     try:
         llm = ChatAnthropic(model=model_name, temperature=0, timeout=_LLM_TIMEOUT)
