@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from app.observability import init_trace, log_trace_event
 from app.observability.events import API_REQUEST, ERROR_CATEGORISED, INTERNAL_ERROR
 from app.observability.token_counter import token_handler
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel, Field
 
 from app.config import configure_logging, get_default_model_name, get_monitoring_settings
@@ -334,15 +334,55 @@ async def stream_run(thread_id: str, request: RunStreamRequest):
     else:
         initial_state = None  # plain resume (clarification etc.)
 
+    # Nodes whose internal LLM reasoning is not useful to surface (routing/utility).
+    _REASONING_SKIP_NODES = frozenset({"memory_loader", "memory_saver", "supervisor"})
+
+    def _extract_text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(
+                blk.get("text", "") for blk in content
+                if isinstance(blk, dict) and blk.get("type") == "text"
+            )
+        return ""
+
     def generate():
         init_trace(thread_id=thread_id)
+        # Buffer for accumulating text chunks per node until a complete LLM turn.
+        text_buffers: dict[str, str] = {}
         try:
-            for chunk in app_graph.stream(initial_state, config, stream_mode="updates"):
-                for node, update in chunk.items():
-                    if update is None or node.startswith("__"):
+            for mode, data in app_graph.stream(
+                initial_state, config, stream_mode=["updates", "messages"]
+            ):
+                if mode == "messages":
+                    msg_chunk, meta = data
+                    node = meta.get("langgraph_node", "")
+                    if node.startswith("__") or node in _REASONING_SKIP_NODES:
                         continue
-                    safe = _make_json_safe(update)
-                    yield f"data: {json.dumps({'node': node, 'updates': safe})}\n\n"
+                    if not isinstance(msg_chunk, AIMessageChunk):
+                        continue
+
+                    text = _extract_text(msg_chunk.content)
+                    if text:
+                        text_buffers[node] = text_buffers.get(node, "") + text
+
+                    # Detect end of a complete LLM turn via stop_reason.
+                    stop_reason = (
+                        msg_chunk.response_metadata.get("stop_reason")
+                        or msg_chunk.response_metadata.get("finish_reason")
+                    )
+                    if stop_reason and text_buffers.get(node):
+                        step = text_buffers.pop(node).strip()
+                        if step:
+                            yield f"data: {json.dumps({'node': node, 'reasoning_step': step})}\n\n"
+
+                elif mode == "updates":
+                    for node, update in data.items():
+                        if update is None or node.startswith("__"):
+                            continue
+                        safe = _make_json_safe(update)
+                        yield f"data: {json.dumps({'node': node, 'updates': safe})}\n\n"
 
             # After the stream completes, check if the graph is paused for HITL.
             # Yield a __pause__ event so the UI can show the HITL card without
