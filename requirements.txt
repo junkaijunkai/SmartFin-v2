@@ -12,6 +12,10 @@ langsmith>=0.2.0,<0.8.0
 
 # --- AI model provider ---
 anthropic>=0.40.0
+openai>=1.0.0
+
+# --- Vector store ---
+pgvector>=0.3.0
 
 # --- Data validation & modelling ---
 pydantic>=2.7.0
