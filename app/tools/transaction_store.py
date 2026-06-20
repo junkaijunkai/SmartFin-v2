@@ -18,6 +18,8 @@ from pathlib import Path
 from app.orchestrator.checkpoints import DATA_DIR
 from app.state import SpendingTrend, Transaction
 
+USER_CACHE_KEY = "user_default"
+
 logger = logging.getLogger(__name__)
 
 _CACHE_DIR = DATA_DIR.parent / ".smartfin_cache"
@@ -52,6 +54,19 @@ def save_analysis(
         logger.debug("[transaction_store] saved analysis for thread %s -> %s", thread_id, path)
     except Exception as exc:
         logger.error("[transaction_store] failed to save analysis for %s: %s", thread_id, exc)
+
+
+def save_user_analysis(
+    categorised: list[Transaction],
+    trends: list[SpendingTrend],
+) -> None:
+    """Persist user-level (cross-session) categorised transactions and trends."""
+    save_analysis(USER_CACHE_KEY, categorised, trends)
+
+
+def load_user_analysis() -> tuple[list[Transaction], list[SpendingTrend]] | None:
+    """Load user-level categorised transactions and trends, or None if not yet cached."""
+    return load_analysis(USER_CACHE_KEY)
 
 
 def load_analysis(

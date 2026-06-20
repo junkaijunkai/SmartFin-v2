@@ -37,7 +37,7 @@ from app.orchestrator.router import (
     route_to_agent,
 )
 from app.tools.memory_store import MemoryStore
-from app.tools.transaction_store import save_analysis
+from app.tools.transaction_store import save_analysis, save_user_analysis
 from app.guardrails.input_filter import filter_user_input, scan_input
 from app.observability import enter_span, log_trace_event, set_thread_id
 from app.observability.events import (SUPERVISOR_DECISION, TRACE_STEP, STATE_SNAPSHOT,
@@ -82,6 +82,20 @@ def memory_loader_node(state: AppState, config: RunnableConfig) -> dict:
                         )
                 except Exception as exc:
                     logger.debug("[memory] Retrieval failed: %s", exc)
+
+        # Restore categorised transactions from user-level cache when this is a
+        # fresh thread (checkpoint has no categorised data yet).
+        if not state.get("categorised_transactions"):
+            from app.tools.transaction_store import load_user_analysis
+            cached = load_user_analysis()
+            if cached:
+                cats, trends = cached
+                result["categorised_transactions"] = cats
+                result["spending_trends"] = trends
+                logger.debug(
+                    "[memory_loader] restored %d categorised transactions from user cache",
+                    len(cats),
+                )
 
         log_trace_event(
             STATE_SNAPSHOT,
@@ -136,29 +150,12 @@ def memory_saver_node(state: AppState, config: RunnableConfig) -> dict:
 
 
 def _write_long_term_memory(thread_id: str, state: AppState) -> None:
-    """Persist confirmed agent outputs to the memory system."""
-    from app.memory.writer import write_memory
-    from app.orchestrator.state_view import AGENT_SCOPES
-
+    """Persist confirmed agent outputs to the vector memory store."""
+    from app.memory.writer import write_task_memory
     agent_name = state.get("active_agent")
     if not agent_name:
         return
-    scope = AGENT_SCOPES.get(agent_name)
-    if not scope:
-        logger.info("[memory] no scope for %s", agent_name)
-        return
-    memory_fields = scope.get("memory", set())
-    if not memory_fields:
-        logger.info("[memory] no memory fields for %s", agent_name)
-        return
-
-    for field in memory_fields:
-        value = state.get(field)
-        if value is not None and not (isinstance(value, list) and not value):
-            try:
-                write_memory(thread_id, field, value)
-            except Exception as exc:
-                logger.warning("[memory] Failed to write '%s': %s", field, exc)
+    write_task_memory(agent_name, dict(state))
 
 
 def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> dict:
@@ -431,6 +428,7 @@ def confirm_node(state: AppState, config: RunnableConfig | None = None) -> dict:
                     trends = state.get("spending_trends") or []
                     if cats:
                         save_analysis(thread_id, cats, trends)
+                        save_user_analysis(cats, trends)
 
                     # Persist approved data so memory_loader can restore it.
                     store = MemoryStore(thread_id)
