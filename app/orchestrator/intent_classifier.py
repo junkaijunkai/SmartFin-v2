@@ -3,7 +3,7 @@ Intent classification — routes user messages to appropriate agents using LLM.
 
 Responsibilities:
   1. Parse user message and classify intent (which agent to invoke).
-  2. Use ChatAnthropic with structured output to ask Claude which agent to route to.
+  2. Use get_llm() with structured output to ask Claude which agent to route to.
   3. Fall back to keyword matching if LLM fails.
 
 Public API:
@@ -16,9 +16,8 @@ import logging
 import os
 from typing import Literal
 
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.tools.cache import get_cached_llm_response, cache_llm_response
 
 logger = logging.getLogger(__name__)
@@ -44,19 +43,19 @@ def _keyword_fallback(message: str) -> str:
     Provides deterministic routing when LLM unavailable.
     """
     msg = message.lower()
+    msg_compact = msg.replace(" ", "")  # collapses intra-word spaces (e.g. "sa ve" → "save")
 
-    if "budget" in msg:
+    if "budget" in msg or "budget" in msg_compact:
         return "budget_planning"
-    elif any(kw in msg for kw in ["goal", "save", "saving", "fund", "deposit"]):
+    elif any(kw in msg or kw in msg_compact for kw in ["goal", "save", "saving", "fund", "deposit"]):
         return "goal_planning"
-    elif any(kw in msg for kw in ["suspicious", "anomal"]):
+    elif any(kw in msg or kw in msg_compact for kw in ["suspicious", "anomal"]):
         return "anomaly_detection"
-    elif any(kw in msg for kw in ["health", "risk"]):
+    elif any(kw in msg or kw in msg_compact for kw in ["health", "risk"]):
         return "health_assessment"
-    elif any(kw in msg for kw in ["spend", "spending", "spent", "expense", "transaction", "categor", "analyse", "analyze"]):
+    elif any(kw in msg or kw in msg_compact for kw in ["spend", "spending", "spent", "expense", "transaction", "categor", "analyse", "analyze"]):
         return "expense_analysis"
 
-    #return "expense_analysis"
     return "unknown"
 
 
@@ -74,8 +73,7 @@ def classify_intent(message: str) -> str:
         return cached["agent"]
 
     try:
-        model_name = resolve_model_name("intent")
-        llm = ChatAnthropic(model=model_name)
+        llm = get_llm("intent")
         structured_llm = llm.with_structured_output(_IntentResult)
 
         messages = get_prompt("intent_classifier").format_messages(message=message)
@@ -105,6 +103,15 @@ def classify_intent(message: str) -> str:
         return result.agent
 
     except Exception as exc:
+        # Gateway returns 400 when a guardrail blocks the request.
+        # Distinguish security blocks from transient LLM errors.
+        try:
+            import openai
+            if isinstance(exc, openai.BadRequestError) and "guardrail_block" in str(exc):
+                logger.warning("[intent_classifier] gateway blocked request (guardrail)")
+                return "blocked"
+        except ImportError:
+            pass
         logger.warning(
             "[intent_classifier] LLM classification failed, falling back to keyword match: %s",
             exc,
