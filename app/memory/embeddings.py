@@ -20,3 +20,17 @@ def embed(text: str) -> list[float]:
         input=text,
     )
     return response.data[0].embedding
+
+
+def embed_batch(texts: list[str]) -> list[list[float]]:
+    """Embed multiple texts in a single API call. Returns embeddings in the same order.
+
+    Returns [] immediately if texts is empty. Raises on failure.
+    """
+    if not texts:
+        return []
+    response = _get_client().embeddings.create(
+        model="text-embedding-3-small",
+        input=texts,
+    )
+    return [item.embedding for item in response.data]
