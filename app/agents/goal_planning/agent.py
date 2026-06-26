@@ -21,13 +21,12 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
-from langchain_anthropic import ChatAnthropic
 
 from app.orchestrator.state_view import AgentStateView
 from app.agents.react_utils import run_react_loop
 from app.agents.goal_planning.tracker import calculate_required_monthly_saving as _calc_saving
 from app.agents.goal_planning.extractor import extract_goal_from_message, GoalExtractionResult
-from app.config import resolve_model_name, get_react_prompt
+from app.config import get_llm, get_react_prompt
 from app.state import AppState, FinancialGoal
 
 logger = logging.getLogger(__name__)
@@ -310,10 +309,7 @@ def run(view: AgentStateView) -> dict:
         return f"Required monthly saving: {required:.2f}"
 
     # --- Build LLM with tools ---
-    model_name = resolve_model_name("planner")
-    llm = ChatAnthropic(
-        model=model_name, timeout=30
-    ).bind_tools([
+    llm = get_llm("planner", timeout=30).bind_tools([
         create_goal_tool,
         calculate_required_saving_tool,
     ])

@@ -11,7 +11,6 @@ Design principle:
 from __future__ import annotations
 
 import calendar
-import inspect
 import logging
 import os
 import re
@@ -21,9 +20,8 @@ from dateutil.relativedelta import relativedelta
 from typing import Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel, Field
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.tools.cache import get_cached_llm_response, cache_llm_response
 
 logger = logging.getLogger(__name__)
@@ -294,14 +292,8 @@ def extract_goal_from_message(
     today = today or date.today()
 
     # 允许通过环境变量覆盖模型名，但不再在生产代码里放 mock mode
-    model_name = resolve_model_name("planner")
-
     try:
-        chat_signature = inspect.signature(ChatAnthropic)
-        if "timeout" in chat_signature.parameters:
-            llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT)
-        else:
-            llm = ChatAnthropic(model=model_name)
+        llm = get_llm("planner", timeout=_LLM_TIMEOUT)
         structured_llm = llm.with_structured_output(GoalExtractionResult)
     except Exception as exc:
         logger.warning("Failed to initialise LLM for goal extraction: %s", exc)
