@@ -16,6 +16,10 @@ Usage:
     app_graph.stream(None, config)
 """
 
+# DEPRECATED: Token tracking has moved to the LiteLLM gateway layer.
+# This module is kept for reference. token_handler is no longer injected
+# as a LangChain callback. See gateway/config.yaml for gateway-level observability.
+
 from __future__ import annotations
 
 import logging

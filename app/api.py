@@ -15,7 +15,6 @@ from fastapi.responses import StreamingResponse
 
 from app.observability import init_trace, log_trace_event
 from app.observability.events import API_REQUEST, ERROR_CATEGORISED, INTERNAL_ERROR
-from app.observability.token_counter import token_handler
 from langchain_core.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel, Field
 
@@ -257,8 +256,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         initial_state["transactions"] = transactions
 
     try:
-        token_handler.reset()
-        state = app_graph.invoke(initial_state, {"configurable": {"thread_id": thread_id}, "callbacks": [token_handler]})
+        state = app_graph.invoke(initial_state, {"configurable": {"thread_id": thread_id}})
     except Exception as exc:
         logger.exception("SmartFin backend request failed.")
         log_trace_event(
@@ -294,10 +292,8 @@ def get_thread_state(thread_id: str):
 
 @app.post("/threads/{thread_id}/runs/stream")
 async def stream_run(thread_id: str, request: RunStreamRequest):
-    token_handler.reset()
     config: dict[str, Any] = {
         "configurable": {"thread_id": thread_id},
-        "callbacks": [token_handler],
     }
     if request.checkpoint_id:
         config["configurable"]["checkpoint_id"] = request.checkpoint_id
@@ -321,6 +317,23 @@ async def stream_run(thread_id: str, request: RunStreamRequest):
         initial_state = None  # resume from checkpoint
 
     elif request.message:
+        # Guard: if the graph is still paused from a previous run (Docker restart
+        # interrupted a HITL or crashed mid-processing), reset routing so the new
+        # message starts a fresh turn instead of being consumed by the stale flow.
+        snap = app_graph.get_state(config)
+        if snap and snap.next:
+            app_graph.update_state(
+                config,
+                {
+                    "active_agent": None,
+                    "pending_confirmation": None,
+                    "hitl_rollback": None,
+                    "hitl_decision": None,
+                    "pending_intent": None,
+                },
+                as_node="supervisor",
+            )
+
         initial_state: dict[str, Any] = {
             "messages": [HumanMessage(content=request.message)],
             "monthly_income": request.monthly_income,
