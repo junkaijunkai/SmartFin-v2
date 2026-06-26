@@ -22,15 +22,13 @@ from pydantic import Field
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
-from langchain_anthropic import ChatAnthropic
-
 from app.state import SpendingTrend, Transaction
 from app.orchestrator.state_view import AgentStateView
 from app.agents.react_utils import run_react_loop
 from app.agents.expense_analysis.categoriser import categorise_transactions
 from app.agents.expense_analysis.analyser import compute_spending_trends
 from app.agents.expense_analysis.extractor import extract_transaction_from_message
-from app.config import resolve_model_name, get_react_prompt
+from app.config import get_llm, get_react_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -174,10 +172,7 @@ def run(view: AgentStateView, config: RunnableConfig | None = None) -> dict:
         )
 
     # --- Build LLM with tools ---
-    model_name = resolve_model_name()
-    llm = ChatAnthropic(
-        model=model_name, timeout=30
-    ).bind_tools([categorise_transactions_tool, compute_spending_trends_tool])
+    llm = get_llm(timeout=30).bind_tools([categorise_transactions_tool, compute_spending_trends_tool])
 
     tools_map: dict[str, Any] = {
         "categorise_transactions_tool": categorise_transactions_tool,

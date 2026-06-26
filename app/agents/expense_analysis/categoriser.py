@@ -18,10 +18,9 @@ import os
 import re
 import time
 
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.state import Transaction, TransactionCategory
 
 logger = logging.getLogger(__name__)
@@ -187,8 +186,7 @@ def categorise_transactions(
     if not transactions:
         return [], True
 
-    model_name = resolve_model_name("default")
-    llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT)
+    llm = get_llm("default", timeout=_LLM_TIMEOUT)
     structured_llm = llm.with_structured_output(_CategoryBatch)
 
     chunks = [

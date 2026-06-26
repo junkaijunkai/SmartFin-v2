@@ -12,7 +12,7 @@ answer to show the user.
 Usage inside an agent node:
 
     from app.agents.react_utils import run_react_loop
-    from langchain_anthropic import ChatAnthropic
+    from app.config import get_llm
 
     def my_agent_node(state: AppState) -> dict:
         tool_ctx: dict = {}
@@ -23,7 +23,7 @@ Usage inside an agent node:
             tool_ctx["key"] = result
             return str(result)
 
-        llm = ChatAnthropic(model=...).bind_tools([my_tool])
+        llm = get_llm("alias").bind_tools([my_tool])
         system = get_prompt("react_my_agent").format(...)
 
         response, _ = run_react_loop(
@@ -98,7 +98,7 @@ def run_react_loop(
     Parameters
     ----------
     llm :
-        A ChatAnthropic instance with ``.bind_tools(tool_list)`` already called.
+        An LLM instance (from get_llm()) with ``.bind_tools(tool_list)`` already called.
     tools :
         Mapping from tool name to callable. The loop executes each tool call
         and appends the result as a ToolMessage before the next LLM invocation.

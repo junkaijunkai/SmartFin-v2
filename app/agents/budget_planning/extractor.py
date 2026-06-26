@@ -6,8 +6,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-from langchain_anthropic import ChatAnthropic
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.state import TransactionCategory
 from app.tools.cache import get_cached_llm_response, cache_llm_response
 
@@ -51,10 +50,8 @@ def extract_budget_request(
     # fallback income from state
     state_income = state.get("monthly_income")
 
-    model_name = resolve_model_name("default")
-
     try:
-        llm = ChatAnthropic(model=model_name, temperature=0, timeout=_LLM_TIMEOUT)
+        llm = get_llm("default", temperature=0, timeout=_LLM_TIMEOUT)
         structured_llm = llm.with_structured_output(BudgetRequest)
     except Exception as exc:
         logger.warning("Failed to initialise LLM for budget extraction: %s", exc)

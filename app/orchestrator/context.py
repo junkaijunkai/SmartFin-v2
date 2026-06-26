@@ -102,8 +102,7 @@ def _build_summary_with_llm(old_messages: list) -> AIMessage:
 
     Falls back to a text-concatenation approach if the LLM is unavailable.
     """
-    from langchain_anthropic import ChatAnthropic
-    from app.config import resolve_model_name, get_react_prompt
+    from app.config import get_llm, get_react_prompt
 
     # Build a compact, lossy-but-helpful text representation
     lines: list[str] = []
@@ -129,8 +128,7 @@ def _build_summary_with_llm(old_messages: list) -> AIMessage:
     )
 
     try:
-        model_name = resolve_model_name()
-        llm = ChatAnthropic(model=model_name, timeout=30)
+        llm = get_llm(timeout=30)
         response = llm.invoke(
             [
                 HumanMessage(

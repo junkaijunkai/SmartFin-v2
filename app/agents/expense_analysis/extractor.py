@@ -47,8 +47,7 @@ def extract_transaction_from_message(
     _quick_filter avoids the LLM call for most non-transaction messages.
     """
     from app.state import Transaction, TransactionCategory
-    from langchain_anthropic import ChatAnthropic
-    from app.config import resolve_model_name, get_prompt
+    from app.config import get_llm, get_prompt
     from app.tools.cache import get_cached_llm_response, cache_llm_response
 
     if not _quick_filter(message):
@@ -59,8 +58,7 @@ def extract_transaction_from_message(
         return [Transaction(**t) for t in cached.get("transactions", [])]
 
     try:
-        model = resolve_model_name("default")
-        llm = ChatAnthropic(model=model)
+        llm = get_llm("default")
         prompt_messages = get_prompt("transaction_extractor").format_messages(message=message)
         result: _TxnExtract = llm.with_structured_output(_TxnExtract).invoke(prompt_messages)
     except Exception:

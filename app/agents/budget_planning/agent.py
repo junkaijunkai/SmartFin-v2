@@ -23,8 +23,6 @@ from pydantic import Field
 
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
-from langchain_anthropic import ChatAnthropic
-
 from app.orchestrator.state_view import AgentStateView
 from app.agents.react_utils import run_react_loop
 from app.agents.budget_planning.planner import (
@@ -33,7 +31,7 @@ from app.agents.budget_planning.planner import (
     evaluate_budget_progress,
     generate_budget_warnings,
 )
-from app.config import resolve_model_name, get_react_prompt
+from app.config import get_llm, get_react_prompt
 from app.guardrails.output_validator import validate_budget_output
 from app.state import BudgetAllocation, TransactionCategory
 
@@ -331,10 +329,7 @@ def budget_planning_node(view: AgentStateView) -> dict:
         )
 
     # --- Build LLM with all tools ---
-    model_name = resolve_model_name()
-    llm = ChatAnthropic(
-        model=model_name, timeout=30
-    ).bind_tools([
+    llm = get_llm(timeout=30).bind_tools([
         extract_budget_request_tool,
         generate_allocations_tool,
         calculate_spending_tool,

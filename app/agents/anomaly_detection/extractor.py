@@ -17,11 +17,10 @@ import os
 import time
 from datetime import datetime
 
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
 from app.agents.anomaly_detection.detector import detect_anomalies
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.state import AnomalyFlag, Transaction
 
 logger = logging.getLogger(__name__)
@@ -115,10 +114,8 @@ def _generate_explanations(
         flagged_transactions_text="---\n".join(lines)
     )
 
-    model_name = resolve_model_name("default")
-
     try:
-        llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT)
+        llm = get_llm("default", timeout=_LLM_TIMEOUT)
         structured_llm = llm.with_structured_output(_ExplanationBatch)
     except Exception as exc:
         logger.warning("Failed to initialise LLM for anomaly explanation: %s", exc)

@@ -35,10 +35,9 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel, Field
 
-from app.config import resolve_model_name, get_prompt
+from app.config import get_llm, get_prompt
 from app.state import (
     Alert,
     AlertSeverity,
@@ -313,8 +312,7 @@ def _generate_advisory(
     the LLM is unavailable — the caller falls back to _build_observations().
     """
     try:
-        model_name = resolve_model_name("default")
-        llm = ChatAnthropic(model=model_name, timeout=_LLM_TIMEOUT ,temperature=0.7)
+        llm = get_llm("default", timeout=_LLM_TIMEOUT, temperature=0.7)
         structured_llm = llm.with_structured_output(_AdvisoryResult)
     except Exception as exc:
         logger.warning("Failed to initialise LLM for health advisory: %s", exc)
