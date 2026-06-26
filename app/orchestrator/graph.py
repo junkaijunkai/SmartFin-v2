@@ -261,20 +261,15 @@ def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> di
             return {
                 "active_agent": "end",
                 "pending_intent": None,
-                "input_filter_result": filter_result,
                 "messages": [AIMessage(content=(
-                    '''
-                    I'm SmartFin, your personal finance AI assistant.
-                    I can only help you with:
-
-                      - **Expense Analysis** — break down your spending by category and spot trends
-                      - **Budget Planning** — set and review monthly spending limits
-                      - **Goal Planning** — create and track savings goals (e.g. emergency fund, holiday)
-                      - **Anomaly Detection** — flag suspicious or unusual transactions
-                      - **Financial Health Assessment** — get an overall picture of your financial health
-
-                    Please rephrase your request to fit one of these categories, and I'll do my best to assist you!
-                    '''
+                    "I'm SmartFin, your personal finance AI assistant. "
+                    "I can only help you with:\n\n"
+                    "- **Expense Analysis** — break down your spending by category and spot trends\n"
+                    "- **Budget Planning** — set and review monthly spending limits\n"
+                    "- **Goal Planning** — create and track savings goals (e.g. emergency fund, holiday)\n"
+                    "- **Anomaly Detection** — flag suspicious or unusual transactions\n"
+                    "- **Financial Health Assessment** — get an overall picture of your financial health\n\n"
+                    "Please rephrase your request to fit one of these categories, and I'll do my best to assist you!"
                 ))],
             }
 
@@ -300,7 +295,6 @@ def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> di
             return {
                 "active_agent": agent_name,
                 "pending_intent": None,
-                "input_filter_result": filter_result,
                 "last_intent": last_intent,
             }
 
@@ -311,14 +305,12 @@ def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> di
                 return {
                     "active_agent": agent_name,
                     "pending_intent": agent_name,
-                    "input_filter_result": filter_result,
                     "last_intent": last_intent,
                 }
             # Prepend expense_analysis, store the real target as pending
             return {
                 "active_agent": "expense_analysis",
                 "pending_intent": agent_name,
-                "input_filter_result": filter_result,
                 "last_intent": last_intent,
             }
 
@@ -328,7 +320,6 @@ def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> di
             return {
                 "active_agent": agent_name,
                 "pending_intent": None,
-                "input_filter_result": filter_result,
                 "last_intent": last_intent,
             }
 
