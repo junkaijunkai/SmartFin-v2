@@ -66,9 +66,10 @@ streamlit run ui/app.py
  - Never commit or push directly to `main`
 - All changes must be branched off `dev`
 - Branch type and commit type must match → see `CONTRIBUTING.md`-->
+- **NEVER READ** `@.env`
 - **YOU MUST** activate the venv and run docker compose to start the backend and frontend services, and to run a test. This is important
 - Follow `@.claude/rules/code-principle.md` during any code modification that include complex dependencies and multiple modules
 - Follow `@.claude/rules/system-design.md` when designing or refactoring a service
-- Use **Plan Mode** before any modification. Split the task. Show me the plan details with reasoning **By Subtask**. DO NOT execute directly, even when auto-accept is turned on
-- Use Subagent-Driven Development at execution. Specify each subtask to a subagent. Run subagents in parallel or sequence judging by the dependencies between subtasks
+- Use **Plan Mode** before modifying core modules. Split the task. Show me the plan details with reasoning **By Subtask**. DO NOT execute directly, even with auto-accept turned on
+- Use Subagent-Driven Development. Specify each subtask to a subagent. Run subagents in parallel or sequence according to the dependencies between subtasks
 - Always check the code syntax after every modification and do a validation yourself
