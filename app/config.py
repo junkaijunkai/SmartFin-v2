@@ -187,12 +187,14 @@ _INLINE_CHAT_PROMPTS: dict[str, ChatPromptTemplate] = {
          '- "Analyse my spending" → expense_analysis\n'
          '- "Help me plan a budget" → budget_planning\n'
          '- "I want to save $8000 for an emergency fund" → goal_planning\n'
-         '- "Save 1000 by June for an IPhone" → goal_planning\n'
+         '- "Save 1000 by June for an iPhone" → goal_planning\n'
          '- "I need a new laptop, want to set aside 2000" → goal_planning\n'
          '- "Flag any suspicious transactions" → anomaly_detection\n'
          '- "How is my financial health?" → health_assessment\n'
          '- "Write a poem" → unknown\n\n'
-         "Key rule: ANY mention of saving money for a future purchase or fund is goal_planning.\n\n"
+         "Key rules:\n"
+         "ANY mention of saving money for a future purchase or fund is goal_planning.\n"
+         "Prioritize semantic matching, only filter unrelated requests. You can still match the corresponding categories based on the intent though there's a typo.\n\n"
          "User message: {message}"),
     ]),
     "goal_extractor": ChatPromptTemplate.from_messages([
@@ -349,6 +351,26 @@ def resolve_model_name(
         return fallback_model
 
     return requested_model
+
+
+def get_llm(alias: str | None = None, **kwargs):
+    """
+    Return a ChatOpenAI client routed through the LiteLLM gateway.
+
+    Uses resolve_model_name(alias) to look up the model from the registry,
+    then connects to the gateway via LITELLM_BASE_URL / LITELLM_VIRTUAL_KEY.
+    Pass extra kwargs (timeout, temperature, etc.) as needed per call site.
+    """
+    import os
+    from langchain_openai import ChatOpenAI
+
+    model_name = resolve_model_name(alias)
+    return ChatOpenAI(
+        model=model_name,
+        base_url=os.environ.get("LITELLM_BASE_URL", "http://gateway:4000/v1"),
+        api_key=os.environ.get("LITELLM_VIRTUAL_KEY", "placeholder"),
+        **kwargs,
+    )
 
 
 def get_monitoring_settings() -> dict[str, Any]:
