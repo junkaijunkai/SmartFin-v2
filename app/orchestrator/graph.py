@@ -135,26 +135,29 @@ def memory_saver_node(state: AppState, config: RunnableConfig) -> dict:
         if not is_tentative:
             store.save_state(dict(state))
 
-        # Write confirmed agent outputs to long-term memory.
-        if not is_tentative:
-            _write_long_term_memory(thread_id, state)
+        # Write confirmed agent outputs to long-term memory only when a
+        # memory-relevant field was actually written this turn.
+        dirty_fields = set(state.get("dirty_memory_fields") or [])
+        if not is_tentative and dirty_fields:
+            _write_long_term_memory(thread_id, state, dirty_fields)
 
         log_trace_event(
             STATE_SNAPSHOT,
             is_tentative=is_tentative,
             active_agent=state.get("active_agent"),
             pending_intent=state.get("pending_intent"),
+            dirty_memory_fields=list(dirty_fields),
         )
-        return {}  # no state update — all effects are filesystem writes
+        return {"dirty_memory_fields": None}  # clear ephemeral field each turn
 
 
-def _write_long_term_memory(thread_id: str, state: AppState) -> None:
+def _write_long_term_memory(thread_id: str, state: AppState, dirty_fields: set[str] | None = None) -> None:
     """Persist confirmed agent outputs to the vector memory store."""
     from app.memory.writer import write_task_memory
     agent_name = state.get("active_agent")
     if not agent_name:
         return
-    write_task_memory(agent_name, dict(state))
+    write_task_memory(agent_name, dict(state), dirty_fields)
 
 
 def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> dict:
@@ -500,6 +503,14 @@ def _wrap_agent(agent_name: str, agent_fn):
                         f"Agent '{agent_name}' wrote to disallowed field "
                         f"'{key}'. Allowed writes: {sorted(allowed_writes)}"
                     )
+
+            # -- Infer dirty memory fields from result keys --
+            # Agents return plain dicts and never call view.set(), so intersect
+            # result keys with the agent's memory scope to detect writes.
+            memory_fields = AGENT_SCOPES[agent_name].get("memory", set())
+            dirty = frozenset(k for k in result if k in memory_fields)
+            if dirty:
+                result["dirty_memory_fields"] = list(dirty)
 
             # -- Compress messages if they grew --
             if "messages" in result:
