@@ -1,0 +1,64 @@
+# LiteLLM Proxy Configuration for SmartFin
+# -------------------------------------------------------------------
+# Model aliases map exactly to the resolved names from
+# app/config.py resolve_model_name() → model_registry.json.
+# The app sends e.g. model="claude-haiku-4-5"; LiteLLM routes it
+# to the Anthropic API using the litellm_params below.
+# -------------------------------------------------------------------
+
+model_list:
+  - model_name: claude-haiku-4-5        # alias: "default"
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-opus-4-8         # alias: "intent"
+    litellm_params:
+      model: anthropic/claude-opus-4-8
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-sonnet-4-6       # alias: "planner"
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-sonnet-4-5       # alias: "balanced" (staging/eval)
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+# -------------------------------------------------------------------
+# Virtual key management — stored in the shared Postgres instance.
+# Issue virtual keys via: POST /key/generate (Bearer $LITELLM_MASTER_KEY)
+# The backend uses one of these issued virtual keys (LITELLM_VIRTUAL_KEY).
+# Real ANTHROPIC_API_KEY never leaves this container.
+# -------------------------------------------------------------------
+general_settings:
+  # master_key is read directly from LITELLM_MASTER_KEY env var — do not set here.
+  # DATABASE_URL is the standard Prisma env var — set in docker-compose, not here.
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true
+
+# -------------------------------------------------------------------
+# Observability — structured JSON logs to stdout (collected by Docker).
+# Each request log includes: model, tokens (input/output), latency_ms,
+# status, and the virtual key alias. Pipe to your log aggregator.
+# -------------------------------------------------------------------
+litellm_settings:
+  json_logs: true
+  # Prometheus metrics exposed at GET /metrics (scrape from port 4000).
+  # Uncomment if you add a Prometheus + Grafana service to compose.
+  # success_callback: ["prometheus"]
+  # failure_callback: ["prometheus"]
+
+# -------------------------------------------------------------------
+# Prompt guardrails — enabled after gateway/guardrails.py is implemented
+# (Module 5 of the integration plan).
+# Uncomment this block once guardrails.py exists in the container.
+# -------------------------------------------------------------------
+guardrails:
+  - guardrail_name: "smartfin-guardrail"
+    litellm_params:
+      guardrail: gateway.guardrails.SmartFinGuardrail
+      mode: "during_call"
+      default_on: true
