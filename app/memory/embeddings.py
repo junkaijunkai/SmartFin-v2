@@ -1,4 +1,4 @@
-"""OpenAI embedding client for SmartFin memory."""
+"""OpenAI embedding client for SmartFin memory, routed through LiteLLM gateway."""
 from __future__ import annotations
 import os
 from openai import OpenAI
@@ -9,7 +9,13 @@ _client: OpenAI | None = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Route through the LiteLLM gateway so OPENAI_API_KEY stays in the
+        # gateway container only. The gateway maps text-embedding-3-small →
+        # openai/text-embedding-3-small using its own OPENAI_API_KEY.
+        _client = OpenAI(
+            base_url=os.getenv("LITELLM_BASE_URL", "http://gateway:4000/v1"),
+            api_key=os.getenv("LITELLM_VIRTUAL_KEY", "placeholder"),
+        )
     return _client
 
 

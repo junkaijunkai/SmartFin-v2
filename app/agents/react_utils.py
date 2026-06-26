@@ -139,6 +139,22 @@ def run_react_loop(
         try:
             response: AIMessage = llm.invoke(messages)
         except Exception as exc:
+            # Distinguish gateway guardrail blocks from transient LLM errors,
+            # mirroring the handling in intent_classifier.py.
+            try:
+                import openai
+                if isinstance(exc, openai.BadRequestError) and "guardrail_block" in str(exc):
+                    logger.warning("[react] gateway blocked request at step %d (guardrail)", step)
+                    log_trace_event(
+                        ERROR_CATEGORISED, error_category=TOOL_ERROR,
+                        step=step, message="guardrail_block",
+                    )
+                    return AIMessage(
+                        content="Your request was blocked by our safety guardrails. "
+                                "Please submit a normal personal finance query."
+                    ), call_history
+            except ImportError:
+                pass
             logger.warning("[react] LLM invocation failed at step %d: %s", step, exc)
             log_trace_event(
                 ERROR_CATEGORISED, error_category=TOOL_ERROR,

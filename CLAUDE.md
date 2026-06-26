@@ -40,6 +40,34 @@ docker compose up -d
 streamlit run ui/app.py
 ```
 
+### LiteLLM Gateway — Virtual Key Setup
+
+The backend uses a scoped virtual key (`LITELLM_VIRTUAL_KEY`) instead of raw API keys.
+On a fresh install the key must be created once after `docker compose up -d`:
+
+```bash
+# Issue a virtual key with access to all registered models
+curl -X POST http://localhost:4000/key/generate \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "models": ["claude-haiku-4-5", "claude-opus-4-8", "claude-sonnet-4-6",
+               "claude-sonnet-4-5", "text-embedding-3-small"],
+    "key_alias": "smartfin-backend"
+  }'
+# Copy the returned "key" value into LITELLM_VIRTUAL_KEY in .env
+```
+
+When new models are added to `gateway/config.yaml`, update the existing key:
+
+```bash
+curl -X POST http://localhost:4000/key/update \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"key": "<LITELLM_VIRTUAL_KEY>", "models": ["claude-haiku-4-5", "claude-opus-4-8",
+       "claude-sonnet-4-6", "claude-sonnet-4-5", "text-embedding-3-small"]}'
+```
+
 ---
 
 ## Key References Index

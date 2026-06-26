@@ -27,6 +27,11 @@ model_list:
       model: anthropic/claude-sonnet-4-5
       api_key: os.environ/ANTHROPIC_API_KEY
 
+  - model_name: text-embedding-3-small  # used by app/memory/embeddings.py
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+
 # -------------------------------------------------------------------
 # Virtual key management — stored in the shared Postgres instance.
 # Issue virtual keys via: POST /key/generate (Bearer $LITELLM_MASTER_KEY)

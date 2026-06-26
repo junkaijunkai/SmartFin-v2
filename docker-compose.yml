@@ -84,10 +84,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # --- LLM Gateway (Module 2) ---
-      # After get_llm() migration is complete, ANTHROPIC_API_KEY can be removed
-      # from backend — the real key lives only in the gateway container.
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}        # keep until Module 2 is done
+      # --- LLM Gateway ---
+      # All LLM and embedding calls route through the gateway; raw API keys
+      # never enter this container.
       LITELLM_BASE_URL: http://gateway:4000/v1
       LITELLM_VIRTUAL_KEY: ${LITELLM_VIRTUAL_KEY:-}    # issued via POST /key/generate
       # --- LangSmith Tracing ---
@@ -99,7 +98,6 @@ services:
       SMARTFIN_ENFORCE_APPROVED_MODELS: ${SMARTFIN_ENFORCE_APPROVED_MODELS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SMARTFIN_LOG_FORMAT: ${SMARTFIN_LOG_FORMAT:-plain}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # for text-embedding-3-small (memory module)
       DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
       REDIS_URL: redis://redis:6379/0
     depends_on:
