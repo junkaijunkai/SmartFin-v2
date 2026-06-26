@@ -1,4 +1,44 @@
 services:
+  # ---------------------------------------------------------------------------
+  # LiteLLM Gateway — OpenAI-compatible proxy in front of Anthropic.
+  # All LLM calls from the backend route through here.
+  # Real ANTHROPIC_API_KEY is scoped to this container only.
+  # Virtual keys are stored in the shared Postgres instance (litellm_* tables).
+  #
+  # Security: pin to a specific digest in production rather than a tag.
+  # Check https://github.com/BerriAI/litellm/releases for the latest stable.
+  # CVE-2024-6587 (SSRF) and related auth-bypass CVEs are fixed in 1.40+.
+  # ---------------------------------------------------------------------------
+  gateway:
+    image: ghcr.io/berriai/litellm:v1.89.0
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./gateway/config.yaml:/app/config.yaml:ro
+      - ./gateway:/app/gateway:ro
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      # Prisma (used by LiteLLM internally) reads DATABASE_URL — not a custom var.
+      # Both gateway and backend point to the same Postgres; LiteLLM creates its
+      # own tables (LiteLLM_* prefix) and does not conflict with LangGraph tables.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # for text-embedding-3-small (memory module)
+      DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
+      PYTHONPATH: /app
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "2"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 120s
+    networks:
+      - smartfin-net
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -44,20 +84,30 @@ services:
     ports:
       - "8000:8000"
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # --- LLM Gateway (Module 2) ---
+      # After get_llm() migration is complete, ANTHROPIC_API_KEY can be removed
+      # from backend — the real key lives only in the gateway container.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}        # keep until Module 2 is done
+      LITELLM_BASE_URL: http://gateway:4000/v1
+      LITELLM_VIRTUAL_KEY: ${LITELLM_VIRTUAL_KEY:-}    # issued via POST /key/generate
+      # --- LangSmith Tracing ---
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-smartfin}
+      # --- Model / App config ---
       SMARTFIN_MODEL: ${SMARTFIN_MODEL:-claude-haiku-4-5}
       SMARTFIN_ENFORCE_APPROVED_MODELS: ${SMARTFIN_ENFORCE_APPROVED_MODELS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SMARTFIN_LOG_FORMAT: ${SMARTFIN_LOG_FORMAT:-plain}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # for text-embedding-3-small (memory module)
       DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      gateway:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -80,6 +130,7 @@ services:
         condition: service_healthy
     environment:
       SMARTFIN_BACKEND_URL: http://backend:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # for text-embedding-3-small (memory module)
       DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
