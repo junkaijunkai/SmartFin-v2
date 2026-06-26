@@ -182,8 +182,10 @@ class AgentStateView:
             )
         self._readable: set[str] = scope["reads"]
         self._writable: set[str] = scope["writes"]
+        self._memory_fields: set[str] = scope.get("memory", set())
         self._source: dict = state
         self._updates: dict = {}
+        self._dirty_memory_fields: set[str] = set()
         self._agent_name: str = agent_name
 
     # -- read --
@@ -212,6 +214,8 @@ class AgentStateView:
                 f"Allowed writes: {sorted(self._writable)}"
             )
         self._updates[key] = value
+        if key in self._memory_fields:
+            self._dirty_memory_fields.add(key)
 
     # -- output --
 
@@ -219,6 +223,11 @@ class AgentStateView:
     def updates(self) -> dict:
         """The collected state updates (read-only)."""
         return dict(self._updates)
+
+    @property
+    def dirty_memory_fields(self) -> frozenset[str]:
+        """Fields in the agent's memory scope that were written this turn."""
+        return frozenset(self._dirty_memory_fields)
 
     @property
     def agent_name(self) -> str:

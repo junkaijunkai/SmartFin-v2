@@ -186,3 +186,8 @@ class AppState(TypedDict):
     # --- HITL rollback snapshot (written by agents, consumed by confirm_node) ---
     hitl_rollback: dict | None
     hitl_decision: dict | None  # HITL user decision: {"confirmed": bool} — set by patch_thread_state
+
+    # --- Transient: which memory-scoped fields the last agent actually wrote ---
+    # Written by _wrap_agent, consumed and cleared by memory_saver_node.
+    # Never persists across turns — memory_saver always resets it to None.
+    dirty_memory_fields: list[str] | None

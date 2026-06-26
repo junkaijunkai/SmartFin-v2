@@ -38,7 +38,6 @@ from app.orchestrator.router import (
 )
 from app.tools.memory_store import MemoryStore
 from app.tools.transaction_store import save_analysis, save_user_analysis
-from app.guardrails.input_filter import filter_user_input, scan_input
 from app.observability import enter_span, log_trace_event, set_thread_id
 from app.observability.events import (SUPERVISOR_DECISION, TRACE_STEP, STATE_SNAPSHOT,
                                       ERROR_CATEGORISED, VALIDATION_ERROR)
@@ -231,32 +230,20 @@ def supervisor_node(state: AppState, config: RunnableConfig | None = None) -> di
 
         last_message = messages[-1].content if messages else ""
 
-        filter_result = filter_user_input(last_message)
+        # Gateway guardrail handles injection detection before the LLM call.
+        # classify_intent() returns "blocked" if the gateway rejects the request.
+        agent_name = classify_intent(last_message)
 
-        # Block clear prompt-injection attempts
-        if not filter_result["allowed"]:
+        if agent_name == "blocked":
             from langchain_core.messages import AIMessage
             return {
                 "active_agent": "end",
                 "pending_intent": None,
-                "input_filter_result": filter_result,
-                "security_events": [{
-                    "source": "input_filter",
-                    "event_type": "blocked_input",
-                    "risk_level": filter_result["risk_level"],
-                    "reasons": filter_result["reasons"],
-                    "message_preview": last_message[:120] if last_message else "",
-                }],
                 "messages": [AIMessage(content=(
                     "Your request was blocked because it appears to contain unsafe or "
                     "irrelevant instructions. Please submit a normal personal finance query."
                 ))],
             }
-
-        safe_message = filter_result["sanitized_message"]
-
-        # Use LLM to classify intent; falls back to keyword matching on error
-        agent_name = classify_intent(safe_message)
 
         # When intent is unknown but the conversation is a continuation of a
         # previous turn (e.g. the user is clarifying a goal or budget), fall
