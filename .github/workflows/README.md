@@ -30,12 +30,12 @@ CI 主要执行以下步骤：
 - 运行 `tests/unit`
 - 运行 `tests/integration`
 - 运行 `tests/security`
+- 运行 Capability Eval：PR 使用 smoke dataset，`main` / `dev` push 使用 full dataset
 - 运行 `scripts/llmsecops_ci.py`
 - 运行 `bandit` 安全扫描
 - 运行 `pip-audit` 依赖漏洞扫描
 - 构建后端 Docker 镜像
 - 构建前端 Docker 镜像
-- 当事件是 `push` 且分支为 `main` / `master` / `dev` 时，在同一个 workflow 中执行部署
 
 ### 目标
 
@@ -43,6 +43,7 @@ CI 的目标是尽量提前发现：
 
 - 代码风格和静态问题
 - 单元测试 / 集成测试失败
+- Agent capability 回归（意图识别、结构化抽取、分类、解释/建议质量）
 - 安全策略回归
 - 依赖漏洞
 - Docker 构建问题
@@ -64,11 +65,9 @@ CD 当前只支持一种触发方式：
 
 - 手动触发：在 GitHub Actions 页面通过 `workflow_dispatch` 手动执行
 
-自动部署已经放到了 `ci-llmsecops.yml` 里的 `deploy` job 中。
-
 这意味着：
 
-- `push` 到 `main` / `master` / `dev`，并且 CI 成功后，会在同一个 CI workflow 中自动部署
+- `push` 到 `main` / `master` / `dev`，只会运行 CI 检查和构建，不会自动部署
 - `pull_request` 即使触发了 CI，也不会自动部署
 - `cd-deploy.yml` 主要用于手动重试或手动重部署
 
@@ -103,13 +102,31 @@ CD 配置了 `concurrency`，同一个分支新的部署会取消旧的进行中
 
 可选：
 
-- `LANGCHAIN_API_KEY`
-- `LANGCHAIN_TRACING_V2`
-- `LANGCHAIN_PROJECT`
+- `LANGSMITH_API_KEY`
+- `LANGSMITH_TRACING`
+- `LANGSMITH_PROJECT`
 - `SMARTFIN_MODEL`
 - `SMARTFIN_ENFORCE_APPROVED_MODELS`
 - `LOG_LEVEL`
 - `SMARTFIN_LOG_FORMAT`
+
+### Capability Eval 配置
+
+CI 中的 Capability Eval 绕过 LiteLLM Gateway，直接访问 OpenAI-compatible
+模型服务。需要在 GitHub Secrets 中配置：
+
+- `SMARTFIN_EVAL_BASE_URL`
+- `SMARTFIN_EVAL_API_KEY`
+
+可选：
+
+- `SMARTFIN_EVAL_PROVIDER`（默认: `openai-compatible`）
+- `SMARTFIN_EVAL_MODEL`（默认: `deepseek-v4-pro`）
+- `SMARTFIN_EVAL_JUDGE_MODEL`（默认: `deepseek-v4-pro`）
+
+PR 会设置 `SMARTFIN_EVAL_SUITE=smoke`；`main` / `dev` push 会设置
+`SMARTFIN_EVAL_SUITE=full`。Eval 报告会生成在 `reports/evals`，上传为
+GitHub Actions artifact，并写入 Actions Summary。
 
 ## 维护建议
 

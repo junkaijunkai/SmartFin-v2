@@ -58,6 +58,38 @@ jobs:
       - name: Security tests
         run: python -m pytest tests/security -v
 
+      - name: Capability evals
+        env:
+          SMARTFIN_EVAL_SUITE: ${{ github.event_name == 'pull_request' && 'smoke' || 'full' }}
+          SMARTFIN_EVAL_PROVIDER: ${{ secrets.SMARTFIN_EVAL_PROVIDER || 'openai-compatible' }}
+          SMARTFIN_EVAL_BASE_URL: ${{ secrets.SMARTFIN_EVAL_BASE_URL }}
+          SMARTFIN_EVAL_API_KEY: ${{ secrets.SMARTFIN_EVAL_API_KEY }}
+          SMARTFIN_EVAL_MODEL: ${{ secrets.SMARTFIN_EVAL_MODEL || 'deepseek-v4-pro' }}
+          SMARTFIN_EVAL_JUDGE_MODEL: ${{ secrets.SMARTFIN_EVAL_JUDGE_MODEL || 'deepseek-v4-pro' }}
+        run: |
+          if [ -z "$SMARTFIN_EVAL_BASE_URL" ] || [ -z "$SMARTFIN_EVAL_API_KEY" ]; then
+            echo "SMARTFIN_EVAL_BASE_URL and SMARTFIN_EVAL_API_KEY must be configured for CI capability evals."
+            exit 1
+          fi
+          python -m pytest tests/evals -m eval -v
+
+      - name: Publish capability eval summary
+        if: always()
+        run: |
+          if [ -f reports/evals/summary.md ]; then
+            cat reports/evals/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Capability eval summary was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload capability eval reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capability-eval-reports
+          path: reports/evals
+          if-no-files-found: ignore
+
       - name: LLMSecOps policy checks
         run: python scripts/llmsecops_ci.py
 
@@ -72,93 +104,3 @@ jobs:
 
       - name: Build frontend Docker image
         run: docker build -f Dockerfile.frontend -t smartfin-frontend:ci .
-
-  deploy:
-    needs: quality-security
-    if: >
-      github.event_name == 'push' &&
-      (
-        github.ref_name == 'main' ||
-        github.ref_name == 'master' ||
-        github.ref_name == 'dev'
-      )
-    runs-on: ubuntu-latest
-    concurrency:
-      group: smartfin-deploy-${{ github.ref_name }}
-      cancel-in-progress: true
-    env:
-      DEPLOY_PATH: /opt/smartfin
-      SOURCE_PATHS: app,ui,config,scripts,nginx,tests/fixtures,requirements.txt,pyproject.toml,docker-compose.yml,Dockerfile.backend,Dockerfile.frontend,.dockerignore
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare remote deployment directory
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          script: |
-            set -eu
-            mkdir -p "${{ env.DEPLOY_PATH }}"
-            rm -rf \
-              "${{ env.DEPLOY_PATH }}/app" \
-              "${{ env.DEPLOY_PATH }}/ui" \
-              "${{ env.DEPLOY_PATH }}/config" \
-              "${{ env.DEPLOY_PATH }}/scripts" \
-              "${{ env.DEPLOY_PATH }}/tests" \
-              "${{ env.DEPLOY_PATH }}/requirements.txt" \
-              "${{ env.DEPLOY_PATH }}/pyproject.toml" \
-              "${{ env.DEPLOY_PATH }}/docker-compose.yml" \
-              "${{ env.DEPLOY_PATH }}/Dockerfile.backend" \
-              "${{ env.DEPLOY_PATH }}/Dockerfile.frontend" \
-              "${{ env.DEPLOY_PATH }}/.dockerignore"
-
-      - name: Upload application source
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          source: ${{ env.SOURCE_PATHS }}
-          target: ${{ env.DEPLOY_PATH }}
-
-      - name: Render runtime environment and restart services
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          script: |
-            set -eu
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "Docker is not installed on the target server."
-              exit 1
-            fi
-
-            cat > "${{ env.DEPLOY_PATH }}/.env" <<'EOF'
-            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-            LANGCHAIN_API_KEY=${{ secrets.LANGCHAIN_API_KEY }}
-            LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}
-            LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}
-            SMARTFIN_MODEL=${{ secrets.SMARTFIN_MODEL }}
-            SMARTFIN_ENFORCE_APPROVED_MODELS=${{ secrets.SMARTFIN_ENFORCE_APPROVED_MODELS }}
-            LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-            SMARTFIN_LOG_FORMAT=${{ secrets.SMARTFIN_LOG_FORMAT }}
-            EOF
-            chmod 600 "${{ env.DEPLOY_PATH }}/.env"
-
-            cd "${{ env.DEPLOY_PATH }}"
-            if docker compose version >/dev/null 2>&1; then
-              docker compose up -d --build --remove-orphans
-            elif command -v docker-compose >/dev/null 2>&1; then
-              docker-compose up -d --build --remove-orphans
-            else
-              echo "Docker Compose is not installed on the target server."
-              exit 1
-            fi

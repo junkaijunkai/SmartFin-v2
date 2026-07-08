@@ -71,9 +71,9 @@ jobs:
 
             cat > "${{ env.DEPLOY_PATH }}/.env" <<'EOF'
             ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-            LANGCHAIN_API_KEY=${{ secrets.LANGCHAIN_API_KEY }}
-            LANGCHAIN_TRACING_V2=${{ secrets.LANGCHAIN_TRACING_V2 }}
-            LANGCHAIN_PROJECT=${{ secrets.LANGCHAIN_PROJECT }}
+            LANGSMITH_API_KEY=${{ secrets.LANGSMITH_API_KEY }}
+            LANGSMITH_TRACING=${{ secrets.LANGSMITH_TRACING }}
+            LANGSMITH_PROJECT=${{ secrets.LANGSMITH_PROJECT }}
             SMARTFIN_MODEL=${{ secrets.SMARTFIN_MODEL }}
             SMARTFIN_ENFORCE_APPROVED_MODELS=${{ secrets.SMARTFIN_ENFORCE_APPROVED_MODELS }}
             LOG_LEVEL=${{ secrets.LOG_LEVEL }}
