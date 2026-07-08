@@ -11,7 +11,7 @@ import re
 import logging
 from typing import Any
 
-from litellm.integrations.custom_guardrail import CustomGuardrail
+from litellm.integrations.custom_guardrail import CustomGuardrail  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,7 @@ class SmartFinGuardrail(CustomGuardrail):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    # 框架 await，所以签名必须 async
     async def async_pre_call_hook(
         self,
         user_api_key_dict,
