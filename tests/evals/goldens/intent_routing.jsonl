@@ -1,0 +1,15 @@
+{"id":"intent_001","tier":"smoke","locale":"en","input":"Show me a breakdown of my spending last month","expected":{"agent":"expense_analysis"}}
+{"id":"intent_002","tier":"smoke","locale":"en","input":"Set me a monthly budget of GBP3000 split between food and transport","expected":{"agent":"budget_planning"}}
+{"id":"intent_003","tier":"smoke","locale":"en","input":"I want to save GBP10000 for a house deposit by the end of 2026","expected":{"agent":"goal_planning"}}
+{"id":"intent_004","tier":"smoke","locale":"en","input":"There's a suspicious GBP500 charge on my account that I don't recognise","expected":{"agent":"anomaly_detection"}}
+{"id":"intent_005","tier":"smoke","locale":"en","input":"What's my overall financial health looking like right now?","expected":{"agent":"health_assessment"}}
+{"id":"intent_006","tier":"full","locale":"zh","input":"帮我分析一下这个月钱都花到哪里去了","expected":{"agent":"expense_analysis"}}
+{"id":"intent_007","tier":"full","locale":"zh","input":"我想给下个月做一个预算，餐饮和交通分开算","expected":{"agent":"budget_planning"}}
+{"id":"intent_008","tier":"full","locale":"zh","input":"我想年底前存五万买车","expected":{"agent":"goal_planning"}}
+{"id":"intent_009","tier":"full","locale":"zh-en","input":"这笔 500 刀 Uber 是不是 abnormal？","expected":{"agent":"anomaly_detection"}}
+{"id":"intent_010","tier":"full","locale":"zh","input":"帮我看看我的财务健康状况和风险","expected":{"agent":"health_assessment"}}
+{"id":"intent_011","tier":"full","locale":"en","input":"Can you categorise these card transactions for me?","expected":{"agent":"expense_analysis"}}
+{"id":"intent_012","tier":"full","locale":"en","input":"I need a plan to stop overspending on groceries","expected":{"agent":"budget_planning"}}
+{"id":"intent_013","tier":"full","locale":"en","input":"Help me track my emergency fund progress","expected":{"agent":"goal_planning"}}
+{"id":"intent_014","tier":"full","locale":"en","input":"Check whether any transaction looks fraudulent or unusual","expected":{"agent":"anomaly_detection"}}
+{"id":"intent_015","tier":"full","locale":"zh-en","input":"My rent is high，帮我评估一下 debt to income risk","expected":{"agent":"health_assessment"}}

@@ -1,44 +1,25 @@
-"""deepeval — Intent Classifier routing accuracy (L3)."""
+"""Capability eval: intent classifier routing accuracy (L3)."""
+
+from __future__ import annotations
 
 import pytest
-from deepeval import assert_test
-from deepeval.metrics import GEval
-from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from app.orchestrator.intent_classifier import classify_intent
+from tests.evals.assertions import assert_equal
+from tests.evals.loaders import GoldenCase, load_goldens
+from tests.evals.reporting import record_result
 
 pytestmark = pytest.mark.eval
 
-_CASES = [
-    ("Show me a breakdown of my spending last month", "expense_analysis"),
-    ("Set me a monthly budget of £3000, split between food and transport", "budget_planning"),
-    ("I want to save £10,000 for a house deposit by end of 2026", "goal_planning"),
-    ("There's a suspicious £500 charge on my account I don't recognise", "anomaly_detection"),
-    ("What's my overall financial health looking like right now?", "health_assessment"),
-]
 
-
-@pytest.mark.parametrize("message,expected_agent", _CASES)
-def test_intent_routing(message: str, expected_agent: str, judge) -> None:
-    actual = classify_intent(message)
-    test_case = LLMTestCase(
-        input=message,
-        actual_output=actual,
-        expected_output=expected_agent,
-    )
-    metric = GEval(
-        name="IntentRoutingAccuracy",
-        criteria=(
-            "The actual_output must be the same agent name as expected_output. "
-            "Score 1.0 only if they match exactly; 0.0 otherwise."
-        ),
-        evaluation_params=[
-            LLMTestCaseParams.INPUT,
-            LLMTestCaseParams.ACTUAL_OUTPUT,
-            LLMTestCaseParams.EXPECTED_OUTPUT,
-        ],
-        threshold=0.9,
-        model=judge,
-        async_mode=False,
-    )
-    assert_test(test_case, [metric])
+@pytest.mark.parametrize("case", load_goldens("intent_routing"), ids=lambda c: c.id)
+def test_intent_routing(case: GoldenCase) -> None:
+    capability = "intent_routing"
+    expected_agent = case.expected["agent"]
+    try:
+        actual = classify_intent(case.input)
+        assert_equal(case.id, "agent", actual, expected_agent)
+    except AssertionError as exc:
+        record_result(case.id, capability, False, str(exc))
+        raise
+    record_result(case.id, capability, True)

@@ -1,0 +1,15 @@
+{"id":"expense_001","tier":"smoke","locale":"en","input":"Monthly rent payment","context":{"merchant":"Landlord","amount":1200.0},"expected":{"category":"housing"}}
+{"id":"expense_002","tier":"smoke","locale":"en","input":"Weekly grocery shopping","context":{"merchant":"Tesco","amount":78.4},"expected":{"category":"food"}}
+{"id":"expense_003","tier":"smoke","locale":"en","input":"Monthly salary","context":{"merchant":"Company Ltd","amount":-3200.0},"expected":{"category":"income"}}
+{"id":"expense_004","tier":"full","locale":"en","input":"Taxi ride to airport","context":{"merchant":"Uber","amount":32.5},"expected":{"category":"transport"}}
+{"id":"expense_005","tier":"full","locale":"en","input":"Streaming subscription","context":{"merchant":"Netflix","amount":15.99},"expected":{"category":"entertainment"}}
+{"id":"expense_006","tier":"full","locale":"zh","input":"电费账单","context":{"merchant":"State Grid","amount":86.2},"expected":{"category":"utilities"}}
+{"id":"expense_007","tier":"full","locale":"zh-en","input":"药房 prescription refill","context":{"merchant":"Boots Pharmacy","amount":18.7},"expected":{"category":"healthcare"}}
+{"id":"expense_008","tier":"full","locale":"en","input":"Online Python course","context":{"merchant":"Coursera","amount":49.0},"expected":{"category":"education"}}
+{"id":"expense_009","tier":"full","locale":"en","input":"New running shoes","context":{"merchant":"Nike","amount":95.0},"expected":{"category":"shopping"}}
+{"id":"expense_010","tier":"full","locale":"en","input":"Transfer to emergency savings","context":{"merchant":"ISA Account","amount":500.0},"expected":{"category":"savings"}}
+{"id":"expense_011","tier":"full","locale":"zh","input":"地铁充值","context":{"merchant":"TFL","amount":40.0},"expected":{"category":"transport"}}
+{"id":"expense_012","tier":"full","locale":"zh","input":"火锅晚餐","context":{"merchant":"Haidilao","amount":68.0},"expected":{"category":"food"}}
+{"id":"expense_013","tier":"full","locale":"en","input":"Broadband monthly bill","context":{"merchant":"BT Internet","amount":35.0},"expected":{"category":"utilities"}}
+{"id":"expense_014","tier":"full","locale":"en","input":"Cinema tickets","context":{"merchant":"Odeon","amount":24.0},"expected":{"category":"entertainment"}}
+{"id":"expense_015","tier":"full","locale":"zh-en","input":"unknown transfer to friend","context":{"merchant":"Personal Transfer","amount":22.0},"expected":{"category":"other"}}

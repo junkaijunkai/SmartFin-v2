@@ -1,46 +1,49 @@
-"""Shared fixtures for deepeval LLM evaluation tests."""
+"""Shared fixtures for capability eval tests."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from dotenv import load_dotenv
-from langchain_anthropic import ChatAnthropic
-
-from deepeval.models.base_model import DeepEvalBaseLLM
 
 from app.state import Transaction, TransactionCategory
-
-load_dotenv()
+from tests.evals.provider import (
+    OpenAICompatibleJudge,
+    missing_eval_env,
+    monkeypatch_eval_llm,
+)
+from tests.evals.reporting import write_summary
 
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
-        "markers", "eval: deepeval LLM evaluation tests (exclude with -m 'not eval')"
+        "markers", "eval: LLM capability evaluation tests (exclude with -m 'not eval')"
     )
 
 
-class ClaudeJudge(DeepEvalBaseLLM):
-    """Thin wrapper so deepeval uses Claude as its judge model instead of OpenAI."""
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    missing = missing_eval_env()
+    if not missing:
+        return
+    reason = "Capability eval provider not configured: " + ", ".join(missing)
+    skip = pytest.mark.skip(reason=reason)
+    for item in items:
+        if "eval" in item.keywords:
+            item.add_marker(skip)
 
-    def load_model(self) -> ChatAnthropic:
-        return ChatAnthropic(model="claude-haiku-4-5")
 
-    def generate(self, prompt: str, *args, **kwargs) -> str:
-        return self.model.invoke(prompt).content
-
-    async def a_generate(self, prompt: str, *args, **kwargs) -> str:
-        result = await self.model.ainvoke(prompt)
-        return result.content
-
-    def get_model_name(self) -> str:
-        return "claude-haiku-4-5"
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    write_summary()
 
 
 @pytest.fixture(scope="session")
-def judge() -> ClaudeJudge:
-    return ClaudeJudge()
+def judge() -> OpenAICompatibleJudge:
+    return OpenAICompatibleJudge()
+
+
+@pytest.fixture(autouse=True)
+def _use_eval_provider(monkeypatch):
+    monkeypatch_eval_llm(monkeypatch)
 
 
 def _txn(
