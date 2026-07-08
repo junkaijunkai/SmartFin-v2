@@ -80,10 +80,6 @@ def _run_registry_checks() -> list[str]:
     if not is_model_approved(default_model):
         failures.append("default model must resolve to an approved model")
 
-    configured_model = os.getenv("SMARTFIN_MODEL")
-    if configured_model and not is_model_approved(resolve_model_name(configured_model, strict=False)):
-        failures.append("SMARTFIN_MODEL resolves to an unapproved model")
-
     return failures
 
 

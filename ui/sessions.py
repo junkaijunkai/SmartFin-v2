@@ -1,5 +1,5 @@
 """
-Session + trace persistence for the Streamlit chat UI.
+Session + trace persistence for the web chat UI.
 
 Tables (same schema as before, now in PostgreSQL):
   sessions(thread_id TEXT PRIMARY KEY, title TEXT, created_at FLOAT, last_activity_at FLOAT)

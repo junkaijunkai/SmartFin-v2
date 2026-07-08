@@ -172,7 +172,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- **Streamlit UI**: `http://localhost:8501`
+- **Web UI**: `http://localhost:8501`
 - **后端 API**: `http://localhost:8000`
 
 ### 本地运行
@@ -184,8 +184,10 @@ cp .env.example .env  # → 填入 ANTHROPIC_API_KEY
 # 启动后端
 uvicorn app.api:app --host 0.0.0.0 --port 8000
 
-# 另一个终端，启动 UI
-streamlit run ui/app.py
+# 另一个终端，启动前端开发服务
+cd ui
+npm install
+npm run dev
 ```
 
 ### 运行测试
@@ -204,7 +206,7 @@ pytest tests/ -v
 | **大语言模型** | [Anthropic Claude](https://www.anthropic.com/)（默认 Haiku，可配置 Sonnet） |
 | **LLM 框架** | [LangChain](https://www.langchain.com/) |
 | **后端** | FastAPI |
-| **UI** | Streamlit |
+| **UI** | React + Vite |
 | **数据校验** | Pydantic v2 |
 | **可观测性** | LangSmith、结构化 JSONL 日志 |
 | **基础设施** | Docker Compose、PostgreSQL（状态检查点）、Redis（缓存） |
@@ -225,7 +227,6 @@ pytest tests/ -v
 | `SMARTFIN_EVAL_MODEL` | 否 | Capability Eval 被测模型（默认: `deepseek-v4-pro`） |
 | `SMARTFIN_EVAL_JUDGE_MODEL` | 否 | 语义评估 judge 模型（默认: `deepseek-v4-pro`） |
 | `SMARTFIN_EVAL_SUITE` | 否 | `smoke` 或 `full`，用于选择评估数据集 |
-| `SMARTFIN_MODEL` | 否 | Claude 模型 ID 或别名（默认: `claude-haiku-4-5`） |
 | `SMARTFIN_ENFORCE_APPROVED_MODELS` | 否 | 设为 `true` 时，未批准的模型 ID 会回退到注册表默认值 |
 | `SMARTFIN_LOG_FORMAT` | 否 | `plain` 或 `json` 日志格式 |
 
@@ -237,6 +238,12 @@ Capability Eval 位于 `tests/evals`，golden dataset 位于
 `tests/evals/goldens`。当前覆盖意图识别和 5 个专业 agent 组件。
 结构化 L1/L3 能力使用 deterministic assertions；自然语言解释/建议类 L2
 能力使用配置好的 OpenAI-compatible judge model。
+
+## 模型注册表
+
+`config/model_registry.json` 是模型选择的单一事实来源。`get_llm()`
+会把 `default`、`intent`、`planner` 这类别名解析成注册表中的具体模型名。
+现在不再保留单独的 `SMARTFIN_MODEL` 环境变量。
 
 本地运行：
 

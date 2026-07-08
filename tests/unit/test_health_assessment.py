@@ -594,7 +594,6 @@ class TestGenerateAdvisory:
         assert captured["model"] == "claude-haiku-4-5"
 
     def test_default_model_when_env_unset(self, monkeypatch):
-        monkeypatch.delenv("SMARTFIN_MODEL", raising=False)
         captured = {}
 
         def _capture_model(*args, **kwargs):
@@ -669,4 +668,3 @@ class TestGenerateAdvisory:
         """Fallback path still produces a non-empty observations list."""
         summary, _ = assess_health([], monthly_income=3000.0)
         assert len(summary.observations) > 0
-

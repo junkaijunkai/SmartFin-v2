@@ -171,7 +171,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- **Streamlit UI**: `http://localhost:8501`
+- **Web UI**: `http://localhost:8501`
 - **Backend API**: `http://localhost:8000`
 
 ### Run Locally
@@ -183,8 +183,10 @@ cp .env.example .env  # → add ANTHROPIC_API_KEY
 # Start the backend
 uvicorn app.api:app --host 0.0.0.0 --port 8000
 
-# In another terminal, start the UI
-streamlit run ui/app.py
+# In another terminal, start the frontend dev server
+cd ui
+npm install
+npm run dev
 ```
 
 ### Run Tests
@@ -203,7 +205,7 @@ pytest tests/ -v
 | **LLM** | [Anthropic Claude](https://www.anthropic.com/) (Haiku by default, Sonnet configurable) |
 | **LLM Framework** | [LangChain](https://www.langchain.com/) |
 | **Backend** | FastAPI |
-| **UI** | Streamlit |
+| **UI** | React + Vite |
 | **Data Validation** | Pydantic v2 |
 | **Observability** | LangSmith, structured JSONL logging |
 | **Infrastructure** | Docker Compose, PostgreSQL (state checkpointing), Redis (caching) |
@@ -224,7 +226,6 @@ pytest tests/ -v
 | `SMARTFIN_EVAL_MODEL` | No | Model under test for capability evals (default: `deepseek-v4-pro`) |
 | `SMARTFIN_EVAL_JUDGE_MODEL` | No | Judge model for semantic evals (default: `deepseek-v4-pro`) |
 | `SMARTFIN_EVAL_SUITE` | No | `smoke` or `full` eval dataset selection |
-| `SMARTFIN_MODEL` | No | Claude model ID or alias (default: `claude-haiku-4-5`) |
 | `SMARTFIN_ENFORCE_APPROVED_MODELS` | No | When `true`, unapproved model IDs fall back to the registry default |
 | `SMARTFIN_LOG_FORMAT` | No | `plain` or `json` logging output |
 
@@ -236,6 +237,13 @@ Capability evals live in `tests/evals` and use JSONL golden datasets from
 `tests/evals/goldens`. They evaluate intent routing plus the five specialist
 agent components. Structured L1/L3 checks use deterministic assertions; L2
 advisory/explanation checks use a configured OpenAI-compatible judge model.
+
+## Model Registry
+
+`config/model_registry.json` is the single source of truth for model selection.
+`get_llm()` resolves aliases such as `default`, `intent`, and `planner` to the
+approved model names in that registry. There is no separate `SMARTFIN_MODEL`
+environment variable anymore.
 
 Run locally:
 

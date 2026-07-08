@@ -1,16 +1,23 @@
-FROM python:3.11-slim
+FROM node:20-alpine AS build
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV SMARTFIN_BACKEND_URL=http://backend:8000
+WORKDIR /app/ui
 
-WORKDIR /app
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci
 
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+COPY ui/ ./
+RUN npm run build
 
-COPY . .
+FROM node:20-alpine
+
+WORKDIR /app/ui
+ENV NODE_ENV=production
+
+COPY --from=build /app/ui/package.json ./package.json
+COPY --from=build /app/ui/package-lock.json ./package-lock.json
+COPY --from=build /app/ui/node_modules ./node_modules
+COPY --from=build /app/ui/dist ./dist
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "ui/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "8501"]

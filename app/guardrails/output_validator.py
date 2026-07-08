@@ -101,7 +101,7 @@ def validate_budget_output(result: Dict[str, Any]) -> Dict[str, Any]:
         errors.append("budget_summary_must_be_str")
     else:
         # Text sanitization is handled by the gateway guardrail; use summary as-is.
-        sanitized_summary = result.get("budget_summary", "")
+        pass
 
     if budget_request is None:
         errors.append("missing_budget_request")

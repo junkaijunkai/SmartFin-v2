@@ -5,7 +5,7 @@ This is an agentic workflow for personal financial management, built with LangGr
 
 ### Tech Stacks
 - Anthropic Claude API - for LLM invocation
-- Streamlit - for the chat interface
+- React + Vite - for the chat interface
 - FastAPI - for communications between the backend and frontend
 - Docker Compose - for services containerizations
 - PostgreSQL - for AppState checkpoint and session persistence
@@ -37,8 +37,13 @@ uv pip install -r requirements.txt
 docker compose up -d
 
 # run UI
-streamlit run ui/app.py
+cd ui
+npm install
+npm run dev
 ```
+
+Model selection is defined in `config/model_registry.json`; there is no separate
+`SMARTFIN_MODEL` environment variable anymore.
 
 ### LiteLLM Gateway — Virtual Key Setup
 

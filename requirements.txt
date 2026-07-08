@@ -28,9 +28,6 @@ pandas>=2.2.0
 fastapi>=0.115.0
 uvicorn>=0.32.0
 
-# --- UI ---
-streamlit>=1.40.0
-
 # --- Caching & async ---
 redis>=5.2.0
 hiredis>=2.3.0

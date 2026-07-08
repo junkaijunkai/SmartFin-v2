@@ -47,7 +47,7 @@ jobs:
           pip install ruff bandit pip-audit
 
       - name: Ruff
-        run: ruff check app/config.py app/api.py app/guardrails ui/app.py tests/security tests/unit/test_config.py scripts/llmsecops_ci.py
+        run: ruff check app/config.py app/api.py app/guardrails tests/security tests/unit/test_config.py scripts/llmsecops_ci.py
 
       - name: Unit tests
         run: python -m pytest tests/unit -v

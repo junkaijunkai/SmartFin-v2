@@ -94,7 +94,6 @@ services:
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-smartfin}
       # --- Model / App config ---
-      SMARTFIN_MODEL: ${SMARTFIN_MODEL:-claude-haiku-4-5}
       SMARTFIN_ENFORCE_APPROVED_MODELS: ${SMARTFIN_ENFORCE_APPROVED_MODELS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SMARTFIN_LOG_FORMAT: ${SMARTFIN_LOG_FORMAT:-plain}
@@ -122,16 +121,10 @@ services:
       dockerfile: Dockerfile.frontend
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       backend:
         condition: service_healthy
-    environment:
-      SMARTFIN_BACKEND_URL: http://backend:8000
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}            # for text-embedding-3-small (memory module)
-      DATABASE_URL: postgresql://smartfin:${POSTGRES_PASSWORD:-smartfin}@postgres:5432/smartfin
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"]
       interval: 30s
       timeout: 10s
       retries: 3
