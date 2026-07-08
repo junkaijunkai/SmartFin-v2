@@ -375,8 +375,8 @@ def get_llm(alias: str | None = None, **kwargs):
 
 def get_monitoring_settings() -> dict[str, Any]:
     return {
-        "langsmith_tracing": _is_truthy(os.getenv("LANGCHAIN_TRACING_V2")),
-        "langsmith_project": os.getenv("LANGCHAIN_PROJECT", "smartfin"),
+        "langsmith_tracing": _is_truthy(os.getenv("LANGSMITH_TRACING")),
+        "langsmith_project": os.getenv("LANGSMITH_PROJECT", "smartfin"),
         "log_level": os.getenv("LOG_LEVEL", "INFO").upper(),
         "log_format": os.getenv("SMARTFIN_LOG_FORMAT", "plain").lower(),
     }

@@ -86,7 +86,7 @@ Each specialist agent follows the **ReAct (Reasoning + Acting)** pattern: the LL
 ### How Tool Calling Works
 
 1. Each agent defines a set of `@tool`-decorated functions (using `langchain_core.tools`). Tools are pure Python — they parse parameters, call deterministic business logic, and return a string result.
-2. The agent binds its tools to a `ChatAnthropic` instance via `.bind_tools()`.
+2. The agent binds its tools to the LangChain chat model returned by `get_llm()` via `.bind_tools()`.
 3. `run_react_loop()` (`app/agents/react_utils.py`) manages the loop: it sends the system prompt + user message, invokes the LLM, and routes tool calls to the appropriate function.
 4. The `final_answer` tool (shared by all agents) signals completion. Its structured arguments (`summary`, `needs_hitl_confirmation`, `hitl_summary`, `hitl_details`) are captured by the loop and written into `pending_confirmation` for HITL.
 
@@ -215,14 +215,38 @@ pytest tests/ -v
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | Claude API access |
-| `LANGCHAIN_API_KEY` | No | LangSmith tracing |
-| `LANGCHAIN_TRACING_V2` | No | Set to `true` to enable LangSmith |
-| `LANGCHAIN_PROJECT` | No | LangSmith project name (default: `smartfin`) |
+| `LANGSMITH_API_KEY` | No | LangSmith tracing |
+| `LANGSMITH_TRACING` | No | Set to `true` to enable LangSmith |
+| `LANGSMITH_PROJECT` | No | LangSmith project name (default: `smartfin`) |
+| `SMARTFIN_EVAL_PROVIDER` | No | Capability eval provider type (default: `openai-compatible`) |
+| `SMARTFIN_EVAL_BASE_URL` | No | OpenAI-compatible endpoint for capability evals |
+| `SMARTFIN_EVAL_API_KEY` | No | API key for the capability eval provider |
+| `SMARTFIN_EVAL_MODEL` | No | Model under test for capability evals (default: `deepseek-v4-pro`) |
+| `SMARTFIN_EVAL_JUDGE_MODEL` | No | Judge model for semantic evals (default: `deepseek-v4-pro`) |
+| `SMARTFIN_EVAL_SUITE` | No | `smoke` or `full` eval dataset selection |
 | `SMARTFIN_MODEL` | No | Claude model ID or alias (default: `claude-haiku-4-5`) |
 | `SMARTFIN_ENFORCE_APPROVED_MODELS` | No | When `true`, unapproved model IDs fall back to the registry default |
 | `SMARTFIN_LOG_FORMAT` | No | `plain` or `json` logging output |
 
 ---
+
+## Capability Evals
+
+Capability evals live in `tests/evals` and use JSONL golden datasets from
+`tests/evals/goldens`. They evaluate intent routing plus the five specialist
+agent components. Structured L1/L3 checks use deterministic assertions; L2
+advisory/explanation checks use a configured OpenAI-compatible judge model.
+
+Run locally:
+
+```bash
+SMARTFIN_EVAL_SUITE=smoke python -m pytest tests/evals -m eval -v
+SMARTFIN_EVAL_SUITE=full python -m pytest tests/evals -m eval -v
+```
+
+CI runs smoke evals on pull requests and full evals on pushes to `main`/`dev`.
+Reports are generated under `reports/evals` and uploaded as GitHub Actions
+artifacts; `reports/evals/summary.md` is also written to the Actions summary.
 
 ## API Endpoints
 

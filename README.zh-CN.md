@@ -87,7 +87,7 @@ transactions ──▶ categorised_transactions ──▶ spending_trends
 ### Tool Calling 机制
 
 1. 每个智能体使用 `@tool` 装饰器定义一组工具函数，每个工具执行一个明确的业务逻辑（如计算统计指标、验证数据）。
-2. 智能体通过 `.bind_tools()` 将工具绑定到 `ChatAnthropic` 实例。
+2. 智能体通过 `.bind_tools()` 将工具绑定到 `get_llm()` 返回的 LangChain chat model。
 3. `run_react_loop()`（`app/agents/react_utils.py`）管理整个循环：发送系统提示和用户消息、调用 LLM、将工具调用路由到对应函数、将结果反馈给 LLM。
 4. 共享的 `final_answer` 工具标志执行完成。其结构化参数（`summary`、`needs_hitl_confirmation`、`hitl_summary`、`hitl_details`）被循环捕获并写入 `pending_confirmation`，触发 HITL 流程。
 
@@ -216,14 +216,38 @@ pytest tests/ -v
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | 是 | Claude API 访问密钥 |
-| `LANGCHAIN_API_KEY` | 否 | LangSmith 追踪 |
-| `LANGCHAIN_TRACING_V2` | 否 | 设为 `true` 启用 LangSmith |
-| `LANGCHAIN_PROJECT` | 否 | LangSmith 项目名（默认: `smartfin`） |
+| `LANGSMITH_API_KEY` | 否 | LangSmith 追踪 |
+| `LANGSMITH_TRACING` | 否 | 设为 `true` 启用 LangSmith |
+| `LANGSMITH_PROJECT` | 否 | LangSmith 项目名（默认: `smartfin`） |
+| `SMARTFIN_EVAL_PROVIDER` | 否 | Capability Eval provider 类型（默认: `openai-compatible`） |
+| `SMARTFIN_EVAL_BASE_URL` | 否 | Capability Eval 使用的 OpenAI-compatible endpoint |
+| `SMARTFIN_EVAL_API_KEY` | 否 | Capability Eval provider API key |
+| `SMARTFIN_EVAL_MODEL` | 否 | Capability Eval 被测模型（默认: `deepseek-v4-pro`） |
+| `SMARTFIN_EVAL_JUDGE_MODEL` | 否 | 语义评估 judge 模型（默认: `deepseek-v4-pro`） |
+| `SMARTFIN_EVAL_SUITE` | 否 | `smoke` 或 `full`，用于选择评估数据集 |
 | `SMARTFIN_MODEL` | 否 | Claude 模型 ID 或别名（默认: `claude-haiku-4-5`） |
 | `SMARTFIN_ENFORCE_APPROVED_MODELS` | 否 | 设为 `true` 时，未批准的模型 ID 会回退到注册表默认值 |
 | `SMARTFIN_LOG_FORMAT` | 否 | `plain` 或 `json` 日志格式 |
 
 ---
+
+## Capability Evals
+
+Capability Eval 位于 `tests/evals`，golden dataset 位于
+`tests/evals/goldens`。当前覆盖意图识别和 5 个专业 agent 组件。
+结构化 L1/L3 能力使用 deterministic assertions；自然语言解释/建议类 L2
+能力使用配置好的 OpenAI-compatible judge model。
+
+本地运行：
+
+```bash
+SMARTFIN_EVAL_SUITE=smoke python -m pytest tests/evals -m eval -v
+SMARTFIN_EVAL_SUITE=full python -m pytest tests/evals -m eval -v
+```
+
+CI 会在 PR 上运行 smoke eval，在 `main` / `dev` push 上运行 full eval。
+报告生成在 `reports/evals`，并作为 GitHub Actions artifact 上传；
+`reports/evals/summary.md` 也会写入 Actions Summary。
 
 ## API 端点
 

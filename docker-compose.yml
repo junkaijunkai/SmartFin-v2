@@ -90,9 +90,9 @@ services:
       LITELLM_BASE_URL: http://gateway:4000/v1
       LITELLM_VIRTUAL_KEY: ${LITELLM_VIRTUAL_KEY:-}    # issued via POST /key/generate
       # --- LangSmith Tracing ---
-      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
-      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
-      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-smartfin}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-smartfin}
       # --- Model / App config ---
       SMARTFIN_MODEL: ${SMARTFIN_MODEL:-claude-haiku-4-5}
       SMARTFIN_ENFORCE_APPROVED_MODELS: ${SMARTFIN_ENFORCE_APPROVED_MODELS:-false}

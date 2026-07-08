@@ -35,8 +35,8 @@ def test_resolve_model_name_falls_back_in_strict_mode():
 
 
 def test_monitoring_settings_reads_env(monkeypatch):
-    monkeypatch.setenv("LANGCHAIN_TRACING_V2", "true")
-    monkeypatch.setenv("LANGCHAIN_PROJECT", "smartfin-ci")
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_PROJECT", "smartfin-ci")
     settings = get_monitoring_settings()
     assert settings["langsmith_tracing"] is True
     assert settings["langsmith_project"] == "smartfin-ci"

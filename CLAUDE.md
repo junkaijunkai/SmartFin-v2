@@ -17,7 +17,7 @@ This is an agentic workflow for personal financial management, built with LangGr
 
 ```bash
 git pull --rebase
-cp .env.example .env        # fill in ANTHROPIC_API_KEY, LANGCHAIN_API_KEY
+cp .env.example .env        # fill in ANTHROPIC_API_KEY, LANGSMITH_API_KEY
 
 # create venv
 uv venv
@@ -94,6 +94,7 @@ curl -X POST http://localhost:4000/key/update \
  - Never commit or push directly to `main`
 - All changes must be branched off `dev`
 - Branch type and commit type must match → see `CONTRIBUTING.md`-->
+- Ask me for further details as long as my request is ambiguous until you've collected all required information. Do this before any write operation.
 - **NEVER READ** `@.env`
 - **YOU MUST** activate the venv and run docker compose to start the backend and frontend services, and to run a test. This is important
 - Follow `@.claude/rules/code-principle.md` during any code modification that include complex dependencies and multiple modules
